@@ -32,7 +32,7 @@ const ChatInterface: React.FC = () => {
   // Load conversation history from Supabase on component mount
   useEffect(() => {
     const fetchConversation = async () => {
-      const user = supabase.auth.user();
+      const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) return;
       
@@ -84,7 +84,7 @@ const ChatInterface: React.FC = () => {
     
     if (!inputMessage.trim()) return;
     
-    const user = supabase.auth.user();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       // Handle unauthenticated state
       alert('Please sign in to continue');
@@ -104,21 +104,24 @@ const ChatInterface: React.FC = () => {
     setLoading(true);
     
     try {
-      // Here we will call our LLM edge function (to be implemented later)
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          conversation_history: messages.slice(-10) // Send last 10 messages for context
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to get response');
-      }
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // Call Supabase Edge Function with proper URL and auth
+        const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            message: inputMessage,
+            conversation_history: messages.slice(-10) // Send last 10 messages for context
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to get response');
+        }
       
       const data = await response.json();
       
@@ -135,12 +138,14 @@ const ChatInterface: React.FC = () => {
       // If the response includes an event preview, show it
       if (data.event) {
         setEventPreview({
-          title: data.event.title,
-          date: new Date(data.event.start_time),
-          startTime: data.event.start_time ? new Date(data.event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-          endTime: data.event.end_time ? new Date(data.event.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-          location: data.event.location
-        });
+            title: data.event.title,
+            date: new Date(data.event.start_time),
+            startTime: data.event.start_time ? new Date(data.event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+            endTime: data.event.end_time ? new Date(data.event.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+            location: data.event.location,
+            isRecurring: data.event.is_recurring || false,
+            recurrencePattern: data.event.recurrence_pattern ? JSON.stringify(data.event.recurrence_pattern) : undefined
+          });
       }
       
       // Save conversation to Supabase
@@ -174,7 +179,7 @@ const ChatInterface: React.FC = () => {
     // Logic to confirm and save the event to the database
     if (!eventPreview) return;
     
-    const user = supabase.auth.user();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     
     try {
