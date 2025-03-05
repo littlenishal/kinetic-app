@@ -19,6 +19,8 @@ interface EventPreview {
   startTime?: string;
   endTime?: string;
   location?: string;
+  isRecurring?: boolean;
+  recurrencePattern?: string;
 }
 
 const ChatInterface: React.FC = () => {
