@@ -19,7 +19,7 @@ interface Event {
   title: string;
   description?: string;
   start_time: Date;
-  end_time?: Date;
+  end_time: Date | null;
   location?: string;
   is_recurring?: boolean;
   recurrence_pattern?: any;
@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
     // Parse potential JSON from the assistant's response
     let event = null;
     let intent = null;
+    let cleanResponse = assistantResponse;
     
     try {
       // Look for JSON in the response
@@ -176,7 +177,6 @@ Deno.serve(async (req) => {
     }
     
     // Clean response text by removing JSON if present
-    let cleanResponse = assistantResponse;
     if (intent) {
       // Remove JSON from response to show clean text to user
       cleanResponse = assistantResponse.replace(/{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/, '').trim();
