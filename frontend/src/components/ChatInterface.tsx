@@ -139,11 +139,16 @@ const ChatInterface: React.FC = () => {
       
       // If the response includes an event preview, show it
       if (data.event) {
+        // Create date objects from the UTC timestamps
+        const startDate = new Date(data.event.start_time);
+        const endDate = data.event.end_time ? new Date(data.event.end_time) : undefined;
+        
+        // Format using the user's local timezone
         setEventPreview({
             title: data.event.title,
-            date: new Date(data.event.start_time),
-            startTime: data.event.start_time ? new Date(data.event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-            endTime: data.event.end_time ? new Date(data.event.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+            date: startDate,
+            startTime: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            endTime: endDate ? endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
             location: data.event.location,
             isRecurring: data.event.is_recurring || false,
             recurrencePattern: data.event.recurrence_pattern ? JSON.stringify(data.event.recurrence_pattern) : undefined

@@ -19,14 +19,9 @@ const EventPreview: React.FC<EventPreviewProps> = ({ event, onConfirm, onCancel 
   // Format the date using our utility function for consistent formatting
   const formattedDate = dateUtils.formatDate(event.date);
   
-  // Format times in local timezone
-  const formattedStartTime = event.startTime ? 
-    new Date(event.date.getTime()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
-    '';
-    
-  const formattedEndTime = event.endTime ? 
-    event.endTime : 
-    '';
+  // Use the already formatted time strings directly without reformatting
+  const formattedStartTime = event.startTime || '';
+  const formattedEndTime = event.endTime || '';
 
   return (
     <div className="event-preview-card">
