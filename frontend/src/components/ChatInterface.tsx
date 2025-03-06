@@ -81,106 +81,144 @@ const ChatInterface: React.FC = () => {
     setInputMessage(e.target.value);
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // This is the relevant part of the ChatInterface.tsx file that needs updating
+// The full component remains the same, just the handleSendMessage function needs to be updated
+
+// Inside the ChatInterface component:
+
+const handleSendMessage = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (!inputMessage.trim()) return;
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // Handle unauthenticated state
+    alert('Please sign in to continue');
+    return;
+  }
+  
+  // Add user message to the chat
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    role: 'user',
+    content: inputMessage,
+    timestamp: new Date()
+  };
+  
+  setMessages(prevMessages => [...prevMessages, userMessage]);
+  setInputMessage('');
+  setLoading(true);
+  
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (!inputMessage.trim()) return;
+    // Call Supabase Edge Function with proper URL and auth
+    const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+      },
+      body: JSON.stringify({
+        message: inputMessage,
+        conversation_history: messages.slice(-10) // Send last 10 messages for context
+      }),
+    });
     
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      // Handle unauthenticated state
-      alert('Please sign in to continue');
-      return;
+    if (!response.ok) {
+      throw new Error('Failed to get response');
     }
+  
+    const data = await response.json();
     
-    // Add user message to the chat
-    const userMessage: Message = {
+    // Add assistant response to the chat
+    const assistantMessage: Message = {
       id: Date.now().toString(),
-      role: 'user',
-      content: inputMessage,
+      role: 'assistant',
+      content: data.message,
       timestamp: new Date()
     };
     
-    setMessages(prevMessages => [...prevMessages, userMessage]);
-    setInputMessage('');
-    setLoading(true);
+    setMessages(prevMessages => [...prevMessages, assistantMessage]);
     
-    try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        // Call Supabase Edge Function with proper URL and auth
-        const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({
-            message: inputMessage,
-            conversation_history: messages.slice(-10) // Send last 10 messages for context
-          }),
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to get response');
-        }
+    // If the response includes an event preview, show it
+    if (data.event) {
+      // Create date objects from the event data
+      // Important: Ensure we're creating proper Date objects
+      // that respect the user's intended date/time
+      let startDate;
       
-      const data = await response.json();
-      
-      // Add assistant response to the chat
-      const assistantMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: data.message,
-        timestamp: new Date()
-      };
-      
-      setMessages(prevMessages => [...prevMessages, assistantMessage]);
-      
-      // If the response includes an event preview, show it
-      if (data.event) {
-        // Create date objects from the UTC timestamps
-        const startDate = new Date(data.event.start_time);
-        const endDate = data.event.end_time ? new Date(data.event.end_time) : undefined;
-        
-        // Format using the user's local timezone
-        setEventPreview({
-            title: data.event.title,
-            date: startDate,
-            startTime: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            endTime: endDate ? endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-            location: data.event.location,
-            isRecurring: data.event.is_recurring || false,
-            recurrencePattern: data.event.recurrence_pattern ? JSON.stringify(data.event.recurrence_pattern) : undefined
-          });
+      if (typeof data.event.start_time === 'string') {
+        // Parse the ISO string from the backend
+        startDate = new Date(data.event.start_time);
+      } else if (data.event.start_time instanceof Date) {
+        // If it's already a Date object (though JSON stringifies dates)
+        startDate = data.event.start_time;
+      } else {
+        // Fallback to current date
+        startDate = new Date();
       }
       
-      // Save conversation to Supabase
-      const allMessages = [...messages, userMessage, assistantMessage];
-      await supabase
-        .from('conversations')
-        .upsert({
-          user_id: user.id,
-          messages: allMessages,
-          updated_at: new Date()
-        });
+      // Handle end time
+      let endTime;
+      if (data.event.end_time) {
+        if (typeof data.event.end_time === 'string') {
+          // Parse the full date string for end time
+          const endDate = new Date(data.event.end_time);
+          
+          // Extract just the time portion
+          const hours = endDate.getHours();
+          const minutes = endDate.getMinutes();
+          endTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        } else {
+          // If it's already formatted
+          endTime = data.event.end_time;
+        }
+      }
       
-    } catch (error) {
-      console.error('Error processing message:', error);
-      
-      // Add error message to chat
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date()
-      };
-      
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
-    } finally {
-      setLoading(false);
+      // Set the event preview with corrected date information
+      setEventPreview({
+        title: data.event.title,
+        date: startDate,
+        startTime: undefined, // Let the EventPreview component format it from the date
+        endTime: endTime, 
+        location: data.event.location,
+        isRecurring: data.event.is_recurring || false,
+        recurrencePattern: data.event.recurrence_pattern 
+          ? (typeof data.event.recurrence_pattern === 'string' 
+            ? data.event.recurrence_pattern 
+            : JSON.stringify(data.event.recurrence_pattern))
+          : undefined
+      });
     }
-  };
+    
+    // Save conversation to Supabase
+    const allMessages = [...messages, userMessage, assistantMessage];
+    await supabase
+      .from('conversations')
+      .upsert({
+        user_id: user.id,
+        messages: allMessages,
+        updated_at: new Date()
+      });
+    
+  } catch (error) {
+    console.error('Error processing message:', error);
+    
+    // Add error message to chat
+    const errorMessage: Message = {
+      id: Date.now().toString(),
+      role: 'assistant',
+      content: 'Sorry, I encountered an error. Please try again.',
+      timestamp: new Date()
+    };
+    
+    setMessages(prevMessages => [...prevMessages, errorMessage]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleConfirmEvent = async () => {
     // Logic to confirm and save the event to the database

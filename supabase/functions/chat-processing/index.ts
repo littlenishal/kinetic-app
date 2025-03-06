@@ -24,6 +24,29 @@ interface Event {
   recurrence_pattern?: any;
 }
 
+// This function helps properly convert dates without timezone issues
+const createDateFromComponents = (dateStr, timeStr) => {
+  try {
+    // Parse the date components
+    const [year, month, day] = dateStr.split('-').map(Number);
+    
+    // Create a base date (don't worry about timezone yet)
+    const date = new Date(year, month - 1, day);
+    
+    // If time is provided, add it
+    if (timeStr) {
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      date.setHours(hours, minutes, 0, 0);
+    }
+    
+    // Return the date object
+    return date;
+  } catch (error) {
+    console.error('Error creating date:', error);
+    return new Date(); // Fallback to current date
+  }
+};
+
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
@@ -142,23 +165,16 @@ Deno.serve(async (req) => {
                 
                 try {
                   // Create a JS Date object from the extracted date and time
-                  // But don't specify hours/minutes here to avoid timezone issues
-                  const [year, month, day] = dateStr.split('-').map(Number);
-                  let startDate = new Date(Date.UTC(year, month - 1, day));
+                  // using our helper function that handles dates properly
+                  const startDate = createDateFromComponents(dateStr, startTimeStr);
                   
-                  // Apply the time separately to maintain the user's intended hour
-                  if (startTimeStr) {
-                    const [hours, minutes] = startTimeStr.split(':').map(Number);
-                    // Use setUTCHours to set time in UTC context
-                    startDate.setUTCHours(hours, minutes);
-                  }
-
+                  // Handle end time if available
                   let endDate = null;
                   if (eventData.end_time) {
+                    // Create end date based on same day as start
                     endDate = new Date(startDate);
                     const [endHours, endMinutes] = eventData.end_time.split(':').map(Number);
-                    // Use setUTCHours for end time as well
-                    endDate.setUTCHours(endHours, endMinutes);
+                    endDate.setHours(endHours, endMinutes, 0, 0);
                   }
                       
                   event = {
