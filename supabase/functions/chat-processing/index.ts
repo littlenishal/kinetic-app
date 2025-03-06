@@ -1,5 +1,4 @@
-// Supabase Edge Function for handling chat messages
-// This will parse user intents and extract calendar event information
+// Complete updated version of supabase/functions/chat-processing/index.ts
 
 import { createClient } from 'supabase';
 import OpenAI from 'openai';
@@ -60,19 +59,16 @@ Deno.serve(async (req) => {
       content: msg.content
     }));
     
-    // Build system prompt
+    // Build improved system prompt with explicit instructions
     const systemPrompt = `You are a helpful AI assistant for a family management app. 
     Help the user manage their calendar events and answer questions about their schedule.
     
-    If the user's message contains a request to create a calendar event, extract the following information:
-    - Event title
-    - Date
-    - Start time
-    - End time (if provided)
-    - Location (if provided)
-    - Recurrence (if it's a recurring event)
-
-    Format this as structured JSON within your response like this:
+    First, generate a friendly, natural language response to the user's request. 
+    DO NOT include any JSON in your visible response text.
+    
+    Then, if the user's message contains a request to create a calendar event, append a SEPARATE JSON object
+    at the END of your response that contains the event details in this format:
+    
     {
       "intent": "create_event",
       "event": {
@@ -86,13 +82,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    If the user is asking about their schedule, respond with:
+    If the user is asking about their schedule, append this JSON at the END of your response:
+    
     {
       "intent": "query_schedule",
       "time_period": "today/tomorrow/this weekend/etc"
     }
 
-    If the message doesn't relate to calendar events, simply respond normally without structured data.`;
+    If the message doesn't relate to calendar events, don't append any JSON.
+    
+    Remember: Your visible response should NEVER contain JSON. The JSON should be separate from your natural language response.
+    
+    Current date and time: ${new Date().toISOString()}`;
 
     // Get OpenAI model from environment variable or use default
     const openAiModel = Deno.env.get('OPENAI_MODEL') || "gpt-4o-mini";
@@ -117,56 +118,107 @@ Deno.serve(async (req) => {
     let cleanResponse = assistantResponse;
     
     try {
-      // Look for JSON in the response
-      const jsonMatch = assistantResponse.match(/{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/);
-      if (jsonMatch) {
-        const jsonData = JSON.parse(jsonMatch[0]);
-        intent = jsonData.intent;
-        
-        // If it's a create_event intent, extract the event data
-        if (intent === 'create_event' && jsonData.event) {
-          const eventData = jsonData.event;
-          
-          // Format the date and time properly
-          const dateStr = eventData.date;
-          const startTimeStr = eventData.start_time;
-          
-          // Create a JS Date object from the extracted date and time
-          const [year, month, day] = dateStr.split('-').map(Number);
-          const [hours, minutes] = startTimeStr.split(':').map(Number);
-          
-          const startDate = new Date(year, month - 1, day, hours, minutes);
-          
-          let endDate = null;
-          if (eventData.end_time) {
-            const [endHours, endMinutes] = eventData.end_time.split(':').map(Number);
-            endDate = new Date(year, month - 1, day, endHours, endMinutes);
+      // Look for JSON in the response - using a regex that matches the full JSON object
+      const jsonRegex = /{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/g;
+      const jsonMatches = assistantResponse.match(jsonRegex);
+      
+      if (jsonMatches && jsonMatches.length > 0) {
+        // Try to parse each potential JSON match
+        for (const jsonStr of jsonMatches) {
+          try {
+            const jsonData = JSON.parse(jsonStr);
+            
+            // Check if this is a valid event or schedule intent
+            if (jsonData.intent === 'create_event' || jsonData.intent === 'query_schedule') {
+              intent = jsonData.intent;
+              
+              // If it's a create_event intent, extract the event data
+              if (intent === 'create_event' && jsonData.event) {
+                const eventData = jsonData.event;
+                
+                // Format the date and time properly
+                const dateStr = eventData.date;
+                const startTimeStr = eventData.start_time;
+                
+                // Check if we have valid date and time data
+                if (dateStr && startTimeStr) {
+                  try {
+                    // Create a JS Date object from the extracted date and time
+                    const [year, month, day] = dateStr.split('-').map(Number);
+                    const [hours, minutes] = startTimeStr.split(':').map(Number);
+                    
+                    const startDate = new Date(year, month - 1, day, hours, minutes);
+                    
+                    let endDate = null;
+                    if (eventData.end_time) {
+                      const [endHours, endMinutes] = eventData.end_time.split(':').map(Number);
+                      endDate = new Date(year, month - 1, day, endHours, endMinutes);
+                    }
+                    
+                    event = {
+                      title: eventData.title,
+                      start_time: startDate,
+                      end_time: endDate,
+                      location: eventData.location,
+                      is_recurring: eventData.is_recurring || false,
+                      recurrence_pattern: eventData.recurrence_pattern
+                    };
+                  } catch (dateError) {
+                    console.error('Error parsing date/time:', dateError);
+                  }
+                }
+              }
+              
+              // Clean response text by removing JSON
+              cleanResponse = assistantResponse.replace(jsonStr, '').trim();
+              
+              // Break after finding the first valid intent
+              break;
+            }
+          } catch (parseError) {
+            // This particular JSON candidate wasn't valid, continue to next one
+            console.error('Error parsing JSON candidate:', parseError);
           }
-          
-          event = {
-            title: eventData.title,
-            start_time: startDate,
-            end_time: endDate,
-            location: eventData.location,
-            is_recurring: eventData.is_recurring || false,
-            recurrence_pattern: eventData.recurrence_pattern
-          };
         }
       }
     } catch (error) {
-      console.error('Error parsing JSON from response:', error);
-      // Continue with the response even if JSON parsing fails
+      console.error('Error processing JSON in response:', error);
+      // Continue with the response even if JSON processing fails
+    }
+    
+    // Remove all remaining JSON-like patterns for safety
+    cleanResponse = cleanResponse.replace(/{[^]*?}/g, '').trim();
+    
+    // Make sure we have a valid response - if it's empty after cleaning, create a reasonable message
+    if (!cleanResponse || cleanResponse.length < 5) {
+      if (event) {
+        cleanResponse = `I'll add "${event.title}" to your calendar for ${event.start_time.toLocaleDateString()} at ${event.start_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+      } else if (intent === 'query_schedule') {
+        cleanResponse = "I'll check your schedule and let you know what's coming up.";
+      } else {
+        cleanResponse = "I understand your request. Is there anything else you'd like me to help with?";
+      }
     }
     
     // If it's a schedule query, fetch relevant events
     let events = [];
     if (intent === 'query_schedule') {
-      // This would be expanded to handle different time periods in a real implementation
+      // Get today's date
+      const today = new Date();
+      const todayStart = new Date(today);
+      todayStart.setHours(0, 0, 0, 0);
+      
+      // Default to showing a week of events
+      let endDate = new Date(today);
+      endDate.setDate(today.getDate() + 7);
+      
+      // Fetch events for the relevant time period
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('user_id', userId)
-        .gte('start_time', new Date().toISOString())
+        .gte('start_time', todayStart.toISOString())
+        .lte('start_time', endDate.toISOString())
         .order('start_time');
         
       if (error) {
@@ -174,12 +226,6 @@ Deno.serve(async (req) => {
       } else {
         events = data;
       }
-    }
-    
-    // Clean response text by removing JSON if present
-    if (intent) {
-      // Remove JSON from response to show clean text to user
-      cleanResponse = assistantResponse.replace(/{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/, '').trim();
     }
 
     return new Response(

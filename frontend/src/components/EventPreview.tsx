@@ -1,4 +1,5 @@
 import React from 'react';
+import * as dateUtils from '../utils/dateUtils';
 
 interface EventPreviewProps {
   event: {
@@ -15,22 +16,25 @@ interface EventPreviewProps {
 }
 
 const EventPreview: React.FC<EventPreviewProps> = ({ event, onConfirm, onCancel }) => {
-  const formatDate = (date: Date): string => {
-    return date.toLocaleDateString(undefined, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
+  // Format the date using our utility function for consistent formatting
+  const formattedDate = dateUtils.formatDate(event.date);
+  
+  // Format times in local timezone
+  const formattedStartTime = event.startTime ? 
+    new Date(event.date.getTime()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
+    '';
+    
+  const formattedEndTime = event.endTime ? 
+    event.endTime : 
+    '';
 
   return (
     <div className="event-preview-card">
       <h3>New Event</h3>
       <p><strong>{event.title}</strong></p>
-      <p>Date: {formatDate(event.date)}</p>
-      {event.startTime && <p>Time: {event.startTime}</p>}
-      {event.endTime && <p>End: {event.endTime}</p>}
+      <p>Date: {formattedDate}</p>
+      {formattedStartTime && <p>Time: {formattedStartTime}</p>}
+      {formattedEndTime && <p>End: {formattedEndTime}</p>}
       {event.location && <p>Location: {event.location}</p>}
       {event.isRecurring && (
         <p>
