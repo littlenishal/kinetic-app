@@ -113,12 +113,16 @@ const handleSendMessage = async (e: React.FormEvent) => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
+    if (!session?.access_token) {
+      throw new Error('No valid session found');
+    }
+    
     // Call Supabase Edge Function with proper URL and auth
     const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         message: inputMessage,
@@ -127,7 +131,9 @@ const handleSendMessage = async (e: React.FormEvent) => {
     });
     
     if (!response.ok) {
-      throw new Error('Failed to get response');
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Error response:', response.status, errorData);
+      throw new Error(`Server responded with status ${response.status}: ${errorData.error || 'Unknown error'}`);
     }
   
     const data = await response.json();

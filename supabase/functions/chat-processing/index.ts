@@ -1,22 +1,17 @@
-// Fixed version of supabase/functions/chat-processing/index.ts
+// supabase/functions/chat-processing/index.ts
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.33.1';
+import OpenAI from 'https://esm.sh/openai@4.0.0';
 
-import { createClient } from 'supabase';
-import OpenAI from 'openai';
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY')
-});
-
-// Initialize Supabase client
-const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-export const corsHeaders = {
+// CORS headers for all responses
+const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
 };
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: Deno.env.get('OPENAI_API_KEY'),
+});
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -25,19 +20,35 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { message, conversation_history } = await req.json();
+    // Get Supabase URL and anon key from environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     
-    // Extract the token from the Authorization header
-    const authHeader = req.headers.get('authorization') || '';
-    const token = authHeader.replace('Bearer ', '');
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Missing Supabase environment variables');
+    }
 
-    if (!token) {
+    // Extract the JWT token from the Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Missing Authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    // Create Supabase client with the JWT token
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
+    // Parse the request body
+    const { message, conversation_history } = await req.json();
+    
     if (!message) {
       return new Response(
         JSON.stringify({ error: 'Message is required' }),
@@ -45,22 +56,24 @@ Deno.serve(async (req) => {
       );
     }
     
-    // Verify the JWT token
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.error('Auth error:', authError);
       return new Response(
-        JSON.stringify({ error: 'Invalid token' }),
+        JSON.stringify({ error: 'Unauthorized', details: authError?.message }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     // Build conversation context for OpenAI
-    const conversationContext = conversation_history.map((msg: any) => ({
-      role: msg.role,
-      content: msg.content
-    }));
+    let conversationContext = [];
+    if (conversation_history && Array.isArray(conversation_history)) {
+      conversationContext = conversation_history.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+    }
     
     // Build improved system prompt with explicit instructions
     const systemPrompt = `You are a helpful AI assistant for a family management app. 
@@ -137,6 +150,14 @@ Deno.serve(async (req) => {
               // If it's a create_event intent, extract the event data
               if (intent === 'create_event' && jsonData.event) {
                 event = jsonData.event;
+                
+                // Add original time strings to preserve LLM intent
+                if (jsonData.event.start_time) {
+                  event.original_start_time = jsonData.event.start_time;
+                }
+                if (jsonData.event.end_time) {
+                  event.original_end_time = jsonData.event.end_time;
+                }
               }
             }
           } catch (parseError) {
@@ -192,7 +213,7 @@ Deno.serve(async (req) => {
         if (error) {
           console.error('Error fetching events:', error);
         } else {
-          events = data;
+          events = data || [];
         }
       } catch (error) {
         console.error('Error processing schedule query:', error);
@@ -214,7 +235,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error', 
-        details: error.toString(),
+        details: error.message || String(error),
         message: "I'm sorry, I couldn't process your request right now. Please try again later."
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
