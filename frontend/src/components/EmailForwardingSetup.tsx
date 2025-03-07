@@ -1,7 +1,9 @@
 // frontend/src/components/EmailForwardingSetup.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
+import { setupOneSignalUser, getOneSignalEmailInbox } from '../services/oneSignalClient';
+import '../styles/EmailForwardingSetup.css';
 
 interface EmailForwardingSetupProps {
   onClose: () => void;
@@ -9,41 +11,60 @@ interface EmailForwardingSetupProps {
 
 const EmailForwardingSetup: React.FC<EmailForwardingSetupProps> = ({ onClose }) => {
   const [userEmail, setUserEmail] = useState<string>('');
-  const [domainName, setDomainName] = useState<string>('yourdomain.com');
+  const [forwardingEmail, setForwardingEmail] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
   
-  // Fetch user email on component mount
-  React.useEffect(() => {
-    const getUserEmail = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
+  // Fetch user email and set up OneSignal on component mount
+  useEffect(() => {
+    const setup = async () => {
+      setLoading(true);
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email || !user?.id) {
+          throw new Error('User information not available');
+        }
+        
         setUserEmail(user.email);
         
-        // Extract domain from user email if possible
-        const emailParts = user.email.split('@');
-        if (emailParts.length === 2) {
-          setDomainName(emailParts[1]);
+        // Set up user's ID and email in OneSignal
+        await setupOneSignalUser(user.id, user.email);
+        
+        // Get the OneSignal email inbox address
+        const inboxAddress = await getOneSignalEmailInbox();
+        if (!inboxAddress) {
+          throw new Error('Failed to get OneSignal email inbox address');
         }
+        
+        setForwardingEmail(inboxAddress);
+        
+        // Store the forwarding address and OneSignal IDs in Supabase for this user
+        await supabase
+          .from('profiles')
+          .update({
+            email_forwarding_address: inboxAddress,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+        
+      } catch (err) {
+        console.error('Error setting up email forwarding:', err);
+        setError('Failed to set up email forwarding. Please try again later.');
+      } finally {
+        setLoading(false);
       }
     };
     
-    getUserEmail();
+    setup();
   }, []);
-  
-  // Generate forwarding email address
-  const getForwardingEmail = (): string => {
-    if (!userEmail) return '';
-    
-    const emailParts = userEmail.split('@');
-    if (emailParts.length !== 2) return '';
-    
-    return `${emailParts[0]}+calendar@${domainName}`;
-  };
   
   // Copy email to clipboard
   const copyToClipboard = () => {
-    const email = getForwardingEmail();
-    navigator.clipboard.writeText(email).then(() => {
+    if (!forwardingEmail) return;
+    
+    navigator.clipboard.writeText(forwardingEmail).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -61,15 +82,22 @@ const EmailForwardingSetup: React.FC<EmailForwardingSetupProps> = ({ onClose }) 
         
         <div className="email-address-box">
           <p className="label">Your email forwarding address:</p>
-          <div className="email-display">
-            <code>{getForwardingEmail()}</code>
-            <button 
-              className="copy-button" 
-              onClick={copyToClipboard}
-            >
-              {copied ? 'Copied!' : 'Copy'}
-            </button>
-          </div>
+          
+          {loading ? (
+            <div className="loading-indicator">Setting up your forwarding address...</div>
+          ) : error ? (
+            <div className="error-message">{error}</div>
+          ) : (
+            <div className="email-display">
+              <code>{forwardingEmail}</code>
+              <button 
+                className="copy-button" 
+                onClick={copyToClipboard}
+              >
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          )}
         </div>
         
         <div className="instructions">

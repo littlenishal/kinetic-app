@@ -1,5 +1,7 @@
+// frontend/src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
+import { initializeOneSignal, setupOneSignalUser, removeOneSignalUser } from './services/oneSignalClient';
 import ChatInterface from './components/ChatInterface';
 import AppHeader from './components/AppHeader';
 import './App.css';
@@ -18,25 +20,39 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    // Initialize OneSignal
+    const oneSignalAppId = process.env.REACT_APP_ONESIGNAL_APP_ID;
+    if (oneSignalAppId) {
+      initializeOneSignal({ appId: oneSignalAppId });
+    } else {
+      console.error('OneSignal App ID not found in environment variables');
+    }
+
     // Get current session and set up listener for auth changes
     const getCurrentSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
-      setLoading(false);
       
       if (session?.user) {
         setUser({
           id: session.user.id,
           email: session.user.email
         });
+        
+        // Set up OneSignal if user is logged in
+        if (session.user.id && session.user.email) {
+          setupOneSignalUser(session.user.id, session.user.email);
+        }
       }
+      
+      setLoading(false);
     };
     
     getCurrentSession();
     
     // Set up listener for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (event, session) => {
         setSession(session);
         
         if (session?.user) {
@@ -44,8 +60,18 @@ function App() {
             id: session.user.id,
             email: session.user.email
           });
+          
+          // Update OneSignal when user logs in
+          if (event === 'SIGNED_IN' && session.user.id && session.user.email) {
+            await setupOneSignalUser(session.user.id, session.user.email);
+          }
         } else {
           setUser(null);
+          
+          // If user signed out, remove them from OneSignal
+          if (event === 'SIGNED_OUT') {
+            await removeOneSignalUser();
+          }
         }
       }
     );
@@ -57,8 +83,6 @@ function App() {
   }, []);
 
   const handleSignIn = async () => {
-    // For simplicity, using a modal sign-in approach
-    // In a real app, you might want to use a dedicated sign-in page
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
