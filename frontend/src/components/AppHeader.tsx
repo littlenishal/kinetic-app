@@ -1,8 +1,6 @@
 // frontend/src/components/AppHeader.tsx
 
 import React, { useState } from 'react';
-import { supabase } from '../services/supabaseClient';
-import EmailForwardingSetup from './EmailForwardingSetup';
 import '../styles/AppHeader.css';
 
 interface AppHeaderProps {
@@ -13,19 +11,9 @@ interface AppHeaderProps {
 
 const AppHeader: React.FC<AppHeaderProps> = ({ userEmail, onSignIn, onSignOut }) => {
   const [showMenu, setShowMenu] = useState(false);
-  const [showEmailSetup, setShowEmailSetup] = useState(false);
   
   const toggleMenu = () => {
     setShowMenu(!showMenu);
-  };
-  
-  const handleOpenEmailSetup = () => {
-    setShowMenu(false);
-    setShowEmailSetup(true);
-  };
-  
-  const handleCloseEmailSetup = () => {
-    setShowEmailSetup(false);
   };
   
   return (
@@ -45,13 +33,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ userEmail, onSignIn, onSignOut })
           
           {showMenu && (
             <div className="dropdown-menu">
-              <button className="menu-item" onClick={handleOpenEmailSetup}>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="2" y="4" width="12" height="8" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M2 5L8 9L14 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                Email Forwarding Setup
-              </button>
               <button className="menu-item" onClick={onSignOut}>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M6 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V3.33333C2 2.97971 2.14048 2.64057 2.39052 2.39052C2.64057 2.14048 2.97971 2 3.33333 2H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -67,13 +48,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ userEmail, onSignIn, onSignOut })
         <button className="sign-in-button" onClick={onSignIn}>
           Sign In with Google
         </button>
-      )}
-      
-      {/* Email Forwarding Setup Modal */}
-      {showEmailSetup && (
-        <div className="modal-overlay">
-          <EmailForwardingSetup onClose={handleCloseEmailSetup} />
-        </div>
       )}
     </header>
   );

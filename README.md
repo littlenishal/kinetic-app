@@ -54,7 +54,7 @@ OPENAI_API_KEY=your_openai_api_key
 4. Deploy edge functions:
    ```
    cd ../edge-functions
-   supabase functions deploy chat
+   supabase functions deploy chat-processing
    ```
 
 ## Features (MVP)
@@ -63,6 +63,13 @@ OPENAI_API_KEY=your_openai_api_key
 - **Event Creation**: Add events to your calendar by simply typing
 - **Schedule Queries**: Ask about upcoming events
 - **User Authentication**: Secure login with Google OAuth
+- **Notifications**: Weekly and daily schedule summaries
+
+## Post-MVP Features
+
+- **Email Integration**: Forward emails to automatically create events (planned for future release)
+- **Family Account Sharing**: Allow multiple family members to access shared calendars
+- **Third-party Calendar Integration**: Sync with Google Calendar, Apple Calendar, etc.
 
 ## Development Tasks
 
@@ -70,9 +77,9 @@ OPENAI_API_KEY=your_openai_api_key
 - [x] Configure environment variables
 - [x] Implement chat interface components
 - [x] Create OpenAI integration for natural language processing
-- [ ] Implement email forwarding for event creation
 - [ ] Set up notification system
 - [ ] Add weekly and daily schedule views
+- [ ] Implement email forwarding for event creation (post-MVP)
 
 ## Contributing
 

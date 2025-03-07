@@ -1,12 +1,10 @@
 // frontend/src/App.tsx
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
-import { initializeOneSignal, setupOneSignalUser, removeOneSignalUser } from './services/oneSignalClient';
 import ChatInterface from './components/ChatInterface';
 import AppHeader from './components/AppHeader';
 import './App.css';
 import './styles/AppHeader.css';
-import './styles/EmailForwardingSetup.css';
 
 // Define user type
 interface User {
@@ -20,14 +18,6 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    // Initialize OneSignal
-    const oneSignalAppId = process.env.REACT_APP_ONESIGNAL_APP_ID;
-    if (oneSignalAppId) {
-      initializeOneSignal({ appId: oneSignalAppId });
-    } else {
-      console.error('OneSignal App ID not found in environment variables');
-    }
-
     // Get current session and set up listener for auth changes
     const getCurrentSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -38,11 +28,6 @@ function App() {
           id: session.user.id,
           email: session.user.email
         });
-        
-        // Set up OneSignal if user is logged in
-        if (session.user.id && session.user.email) {
-          setupOneSignalUser(session.user.id, session.user.email);
-        }
       }
       
       setLoading(false);
@@ -60,18 +45,8 @@ function App() {
             id: session.user.id,
             email: session.user.email
           });
-          
-          // Update OneSignal when user logs in
-          if (event === 'SIGNED_IN' && session.user.id && session.user.email) {
-            await setupOneSignalUser(session.user.id, session.user.email);
-          }
         } else {
           setUser(null);
-          
-          // If user signed out, remove them from OneSignal
-          if (event === 'SIGNED_OUT') {
-            await removeOneSignalUser();
-          }
         }
       }
     );
@@ -142,10 +117,10 @@ function App() {
                 </div>
               </div>
               <div className="feature-item">
-                <div className="feature-icon">📧</div>
+                <div className="feature-icon">📅</div>
                 <div className="feature-text">
-                  <h3>Email Forwarding</h3>
-                  <p>Forward emails with event details to automatically add them to your calendar</p>
+                  <h3>Smart Calendar</h3>
+                  <p>Easily view, edit and manage all your family events in one place</p>
                 </div>
               </div>
               <div className="feature-item">
