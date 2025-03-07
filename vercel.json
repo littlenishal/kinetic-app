@@ -5,11 +5,11 @@
         "src": "frontend/package.json",
         "use": "@vercel/static-build",
         "config": {
-          "distDir": "build"
+          "distDir": "frontend/build"
         }
       }
     ],
     "rewrites": [
-      { "source": "/(.*)", "destination": "/frontend/build/index.html" }
+      { "source": "/(.*)", "destination": "/index.html" }
     ]
   }
