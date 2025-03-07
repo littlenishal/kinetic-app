@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
 import ChatInterface from './components/ChatInterface';
+import AppHeader from './components/AppHeader';
 import './App.css';
+import './styles/AppHeader.css';
+import './styles/EmailForwardingSetup.css';
 
 // Define user type
 interface User {
@@ -90,21 +93,11 @@ function App() {
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>Family Assistant</h1>
-        {user ? (
-          <div className="user-info">
-            <span>{user.email}</span>
-            <button className="sign-out-button" onClick={handleSignOut}>
-              Sign Out
-            </button>
-          </div>
-        ) : (
-          <button className="sign-in-button" onClick={handleSignIn}>
-            Sign In with Google
-          </button>
-        )}
-      </header>
+      <AppHeader 
+        userEmail={user?.email}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
+      />
       
       <main className="App-main">
         {user ? (
@@ -116,6 +109,29 @@ function App() {
               A chat-based family management app that helps busy families organize 
               their lives through natural language interactions.
             </p>
+            <div className="feature-list">
+              <div className="feature-item">
+                <div className="feature-icon">💬</div>
+                <div className="feature-text">
+                  <h3>Chat-Based Calendar</h3>
+                  <p>Create events by simply typing things like "Schedule soccer practice on Tuesday at 4pm"</p>
+                </div>
+              </div>
+              <div className="feature-item">
+                <div className="feature-icon">📧</div>
+                <div className="feature-text">
+                  <h3>Email Forwarding</h3>
+                  <p>Forward emails with event details to automatically add them to your calendar</p>
+                </div>
+              </div>
+              <div className="feature-item">
+                <div className="feature-icon">🔔</div>
+                <div className="feature-text">
+                  <h3>Smart Notifications</h3>
+                  <p>Get daily and weekly schedule updates to stay on top of your family's activities</p>
+                </div>
+              </div>
+            </div>
             <button className="sign-in-button large" onClick={handleSignIn}>
               Sign In to Get Started
             </button>

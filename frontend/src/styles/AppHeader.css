@@ -1,0 +1,134 @@
+/* frontend/src/styles/AppHeader.css */
+
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+  
+  .app-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #0084ff;
+    margin: 0;
+  }
+  
+  .user-menu {
+    position: relative;
+  }
+  
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+  }
+  
+  .user-info:hover {
+    background-color: #f0f2f5;
+  }
+  
+  .user-info span {
+    font-size: 14px;
+    color: #65676b;
+  }
+  
+  .menu-button {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #65676b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    width: 240px;
+    z-index: 100;
+  }
+  
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 14px;
+    cursor: pointer;
+    color: #050505;
+    transition: background-color 0.2s;
+  }
+  
+  .menu-item:hover {
+    background-color: #f0f2f5;
+  }
+  
+  .menu-item svg {
+    color: #65676b;
+  }
+  
+  .sign-in-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    background-color: #0084ff;
+    color: white;
+    transition: background-color 0.2s;
+  }
+  
+  .sign-in-button:hover {
+    background-color: #0077e6;
+  }
+  
+  /* Modal styles */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+  }
+  
+  /* Responsive styles */
+  @media (max-width: 480px) {
+    .app-header {
+      padding: 12px 16px;
+    }
+    
+    .app-header h1 {
+      font-size: 20px;
+    }
+    
+    .dropdown-menu {
+      width: 220px;
+      right: -8px;
+    }
+  }
