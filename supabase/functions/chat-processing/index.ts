@@ -138,7 +138,6 @@ Deno.serve(async (req) => {
     // Parse potential JSON from the assistant's response
     let event = null;
     let intent = null;
-    let cleanResponse = assistantResponse;
     
     try {
       // Look for JSON in the response - using a regex that matches the full JSON object
@@ -159,55 +158,73 @@ Deno.serve(async (req) => {
               if (intent === 'create_event' && jsonData.event) {
                 const eventData = jsonData.event;
                 
-                // Format the date and time properly
-                const dateStr = eventData.date;
-                const startTimeStr = eventData.start_time;
-                
-                try {
-                  // Create a JS Date object from the extracted date and time
-                  // using our helper function that handles dates properly
-                  const startDate = createDateFromComponents(dateStr, startTimeStr);
+                // IMPORTANT CHANGE: Don't try to convert times to Date objects here
+                // Instead, preserve the original time information from the LLM
+                event = {
+                  title: eventData.title,
+                  date: eventData.date,  // Keep as string "YYYY-MM-DD"
+                  start_time: eventData.start_time,  // Keep as string "HH:MM"
+                  end_time: eventData.end_time,  // Keep as string "HH:MM" if exists
+                  location: eventData.location,
+                  is_recurring: eventData.is_recurring || false,
+                  recurrence_pattern: eventData.recurrence_pattern,
                   
-                  // Handle end time if available
-                  let endDate = null;
-                  if (eventData.end_time) {
-                    // Create end date based on same day as start
-                    endDate = new Date(startDate);
-                    const [endHours, endMinutes] = eventData.end_time.split(':').map(Number);
-                    endDate.setHours(endHours, endMinutes, 0, 0);
-                  }
+                  // Add original time strings to preserve LLM intent
+                  original_start_time: eventData.start_time,
+                  original_end_time: eventData.end_time
+                };
+                
+                // We still need a date object for database storing, so create one
+                // but keep it separate from what we'll send to the frontend
+                try {
+                  // Only create Date objects for internal use, not for display
+                  if (eventData.date && eventData.start_time) {
+                    const [year, month, day] = eventData.date.split('-').map(Number);
+                    const [hours, minutes] = eventData.start_time.split(':').map(Number);
+                    
+                    const startDateObj = new Date(year, month - 1, day);
+                    startDateObj.setHours(hours, minutes, 0, 0);
+                    
+                    // Store this separately for database operations
+                    event.start_date_obj = startDateObj;
+                    
+                    // If end time exists, create end date object too
+                    if (eventData.end_time) {
+                      const [endHours, endMinutes] = eventData.end_time.split(':').map(Number);
+                      const endDateObj = new Date(year, month - 1, day);
+                      endDateObj.setHours(endHours, endMinutes, 0, 0);
                       
-                  event = {
-                    title: eventData.title,
-                    start_time: startDate,
-                    end_time: endDate,
-                    location: eventData.location,
-                    is_recurring: eventData.is_recurring || false,
-                    recurrence_pattern: eventData.recurrence_pattern
-                  };
+                      // Store separately for database operations
+                      event.end_date_obj = endDateObj;
+                    }
+                  }
                 } catch (dateError) {
-                  console.error('Error parsing date/time:', dateError);
+                  console.error('Error creating date objects:', dateError);
                 }
               }
             }
           } catch (parseError) {
             console.error('Error parsing JSON candidate:', parseError);
-            // Continue to next JSON candidate
           }
         }
       }
     } catch (error) {
       console.error('Error processing JSON in response:', error);
-      // Continue with the response even if JSON processing fails
     }
     
     // Clean response text by removing JSON
-    cleanResponse = assistantResponse.replace(/{[^]*?}/g, '').trim();
-    
+    // This will remove any stray braces that might be part of incomplete JSON objects
+    let cleanResponse = assistantResponse
+      // First remove complete JSON objects
+      .replace(/{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/g, '')
+      // Then remove any stray closing braces that might be left
+      .replace(/\s*\}\s*\}/g, '')
+      .trim();
+
     // Make sure we have a valid response - if it's empty after cleaning, create a reasonable message
     if (!cleanResponse || cleanResponse.length < 5) {
       if (event) {
-        cleanResponse = `I'll add "${event.title}" to your calendar for ${event.start_time.toLocaleDateString()} at ${event.start_time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`;
+        cleanResponse = `I'll add "${event.title}" to your calendar.`;
       } else if (intent === 'query_schedule') {
         cleanResponse = "I'll check your schedule and let you know what's coming up.";
       } else {

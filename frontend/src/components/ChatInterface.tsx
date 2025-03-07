@@ -144,51 +144,72 @@ const handleSendMessage = async (e: React.FormEvent) => {
     
     // If the response includes an event preview, show it
     if (data.event) {
-      // Create date objects from the event data
-      // Important: Ensure we're creating proper Date objects
-      // that respect the user's intended date/time
-      let startDate;
-      
-      if (typeof data.event.start_time === 'string') {
-        // Parse the ISO string from the backend
-        startDate = new Date(data.event.start_time);
-      } else if (data.event.start_time instanceof Date) {
-        // If it's already a Date object (though JSON stringifies dates)
-        startDate = data.event.start_time;
-      } else {
-        // Fallback to current date
-        startDate = new Date();
+      // Create a base date object from the date string, but don't use for time display
+      let eventDate: Date;
+  
+      try {
+        // If we have a date string like "2025-03-08"
+        if (typeof data.event.date === 'string' && data.event.date.includes('-')) {
+          const [year, month, day] = data.event.date.split('-').map(Number);
+          eventDate = new Date(year, month - 1, day);
+        } else if (data.event.start_time instanceof Date) {
+          // If it's already a Date object
+          eventDate = new Date(data.event.start_time);
+        } else {
+          // Fallback to current date
+          eventDate = new Date();
+        }
+      } catch (error) {
+        console.error('Error parsing date:', error);
+        eventDate = new Date();
       }
       
-      // Handle end time
-      let endTime;
-      if (data.event.end_time) {
-        if (typeof data.event.end_time === 'string') {
-          // Parse the full date string for end time
-          const endDate = new Date(data.event.end_time);
-          
-          // Extract just the time portion
-          const hours = endDate.getHours();
-          const minutes = endDate.getMinutes();
-          endTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-        } else {
-          // If it's already formatted
-          endTime = data.event.end_time;
+      // IMPORTANT: Use the original time strings directly from the LLM
+      // This preserves the user's requested times without timezone conversion issues
+      
+      // Format times for direct display in 12-hour format with AM/PM
+      // Format from "HH:MM" (24hr) to "H:MM AM/PM" (12hr) if needed
+      let displayStartTime = data.event.original_start_time || data.event.start_time;
+      let displayEndTime = data.event.original_end_time || data.event.end_time;
+      
+      // Convert 24-hour format to 12-hour if needed
+      if (displayStartTime && displayStartTime.includes(':') && !displayStartTime.toLowerCase().includes('am') && !displayStartTime.toLowerCase().includes('pm')) {
+        // Convert from 24h to 12h format
+        try {
+          const [hours, minutes] = displayStartTime.split(':').map(Number);
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
+          displayStartTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+        } catch (error) {
+          // Keep original if conversion fails
+          console.error('Error formatting start time:', error);
+        }
+      }
+      
+      // Same for end time
+      if (displayEndTime && displayEndTime.includes(':') && !displayEndTime.toLowerCase().includes('am') && !displayEndTime.toLowerCase().includes('pm')) {
+        try {
+          const [hours, minutes] = displayEndTime.split(':').map(Number);
+          const period = hours >= 12 ? 'PM' : 'AM';
+          const displayHours = hours % 12 || 12;
+          displayEndTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+        } catch (error) {
+          console.error('Error formatting end time:', error);
         }
       }
       
       // Set the event preview with corrected date information
       setEventPreview({
         title: data.event.title,
-        date: startDate,
-        startTime: undefined, // Let the EventPreview component format it from the date
-        endTime: endTime, 
+        date: eventDate, // Use Date object only for the date part
+        startTime: displayStartTime,
+        endTime: displayEndTime,
         location: data.event.location,
         isRecurring: data.event.is_recurring || false,
         recurrencePattern: data.event.recurrence_pattern 
           ? (typeof data.event.recurrence_pattern === 'string' 
-            ? data.event.recurrence_pattern 
-            : JSON.stringify(data.event.recurrence_pattern))
+              ? data.event.recurrence_pattern 
+              : JSON.stringify(data.event.recurrence_pattern))
           : undefined
       });
     }
