@@ -1,0 +1,66 @@
+/* frontend/src/styles/Navigation.css */
+
+.app-navigation {
+    display: flex;
+    background-color: white;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0 16px;
+  }
+  
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #666;
+    font-size: 14px;
+    position: relative;
+    transition: color 0.2s;
+    flex: 1;
+    max-width: 120px;
+  }
+  
+  .nav-item.active {
+    color: #0084ff;
+  }
+  
+  .nav-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #0084ff;
+  }
+  
+  .nav-icon {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+  
+  .nav-label {
+    font-weight: 500;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 480px) {
+    .app-navigation {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+      padding: 0;
+    }
+    
+    .nav-item {
+      padding: 8px 12px;
+      flex: 1;
+      max-width: none;
+    }
+  }

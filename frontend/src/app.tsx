@@ -2,9 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
 import ChatInterface from './components/ChatInterface';
+import CalendarPage from './pages/CalendarPage';
 import AppHeader from './components/AppHeader';
+import Navigation from './components/Navigation';
 import './App.css';
 import './styles/AppHeader.css';
+import './styles/Navigation.css';
 
 // Define user type
 interface User {
@@ -16,6 +19,7 @@ function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
+  const [currentView, setCurrentView] = useState<'chat' | 'calendar'>('chat');
 
   useEffect(() => {
     // Get current session and set up listener for auth changes
@@ -80,6 +84,11 @@ function App() {
     }
   };
 
+  // Change between chat and calendar views
+  const handleViewChange = (view: 'chat' | 'calendar') => {
+    setCurrentView(view);
+  };
+
   // Show loading state
   if (loading) {
     return (
@@ -98,9 +107,19 @@ function App() {
         onSignOut={handleSignOut}
       />
       
-      <main className="App-main">
+      {user && (
+        <Navigation 
+          currentView={currentView}
+          onViewChange={handleViewChange}
+        />
+      )}
+      
+      <main className={`App-main ${!user ? 'welcome-view' : ''}`}>
         {user ? (
-          <ChatInterface />
+          <>
+            {currentView === 'chat' && <ChatInterface />}
+            {currentView === 'calendar' && <CalendarPage />}
+          </>
         ) : (
           <div className="welcome-container">
             <h2>Welcome to Family Assistant</h2>
