@@ -1,4 +1,4 @@
-// Complete updated version of supabase/functions/chat-processing/index.ts
+// Fixed version of supabase/functions/chat-processing/index.ts
 
 import { createClient } from 'supabase';
 import OpenAI from 'openai';
@@ -13,40 +13,6 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Define interface for event data
-interface Event {
-  title: string;
-  description?: string;
-  start_time: Date;
-  end_time: Date | null;
-  location?: string;
-  is_recurring?: boolean;
-  recurrence_pattern?: any;
-}
-
-// This function helps properly convert dates without timezone issues
-const createDateFromComponents = (dateStr, timeStr) => {
-  try {
-    // Parse the date components
-    const [year, month, day] = dateStr.split('-').map(Number);
-    
-    // Create a base date (don't worry about timezone yet)
-    const date = new Date(year, month - 1, day);
-    
-    // If time is provided, add it
-    if (timeStr) {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      date.setHours(hours, minutes, 0, 0);
-    }
-    
-    // Return the date object
-    return date;
-  } catch (error) {
-    console.error('Error creating date:', error);
-    return new Date(); // Fallback to current date
-  }
-};
-
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
@@ -60,9 +26,12 @@ Deno.serve(async (req) => {
 
   try {
     const { message, conversation_history } = await req.json();
-    const userId = req.headers.get('authorization')?.split(' ')[1];
+    
+    // Extract the token from the Authorization header
+    const authHeader = req.headers.get('authorization') || '';
+    const token = authHeader.replace('Bearer ', '');
 
-    if (!userId) {
+    if (!token) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -73,6 +42,17 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Message is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // Verify the JWT token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
@@ -133,7 +113,7 @@ Deno.serve(async (req) => {
       max_tokens: 500,
     });
 
-    const assistantResponse = completion.choices[0].message.content;
+    const assistantResponse = completion.choices[0].message.content || '';
     
     // Parse potential JSON from the assistant's response
     let event = null;
@@ -156,51 +136,7 @@ Deno.serve(async (req) => {
               
               // If it's a create_event intent, extract the event data
               if (intent === 'create_event' && jsonData.event) {
-                const eventData = jsonData.event;
-                
-                // IMPORTANT CHANGE: Don't try to convert times to Date objects here
-                // Instead, preserve the original time information from the LLM
-                event = {
-                  title: eventData.title,
-                  date: eventData.date,  // Keep as string "YYYY-MM-DD"
-                  start_time: eventData.start_time,  // Keep as string "HH:MM"
-                  end_time: eventData.end_time,  // Keep as string "HH:MM" if exists
-                  location: eventData.location,
-                  is_recurring: eventData.is_recurring || false,
-                  recurrence_pattern: eventData.recurrence_pattern,
-                  
-                  // Add original time strings to preserve LLM intent
-                  original_start_time: eventData.start_time,
-                  original_end_time: eventData.end_time
-                };
-                
-                // We still need a date object for database storing, so create one
-                // but keep it separate from what we'll send to the frontend
-                try {
-                  // Only create Date objects for internal use, not for display
-                  if (eventData.date && eventData.start_time) {
-                    const [year, month, day] = eventData.date.split('-').map(Number);
-                    const [hours, minutes] = eventData.start_time.split(':').map(Number);
-                    
-                    const startDateObj = new Date(year, month - 1, day);
-                    startDateObj.setHours(hours, minutes, 0, 0);
-                    
-                    // Store this separately for database operations
-                    event.start_date_obj = startDateObj;
-                    
-                    // If end time exists, create end date object too
-                    if (eventData.end_time) {
-                      const [endHours, endMinutes] = eventData.end_time.split(':').map(Number);
-                      const endDateObj = new Date(year, month - 1, day);
-                      endDateObj.setHours(endHours, endMinutes, 0, 0);
-                      
-                      // Store separately for database operations
-                      event.end_date_obj = endDateObj;
-                    }
-                  }
-                } catch (dateError) {
-                  console.error('Error creating date objects:', dateError);
-                }
+                event = jsonData.event;
               }
             }
           } catch (parseError) {
@@ -213,7 +149,6 @@ Deno.serve(async (req) => {
     }
     
     // Clean response text by removing JSON
-    // This will remove any stray braces that might be part of incomplete JSON objects
     let cleanResponse = assistantResponse
       // First remove complete JSON objects
       .replace(/{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/g, '')
@@ -221,7 +156,7 @@ Deno.serve(async (req) => {
       .replace(/\s*\}\s*\}/g, '')
       .trim();
 
-    // Make sure we have a valid response - if it's empty after cleaning, create a reasonable message
+    // Make sure we have a valid response
     if (!cleanResponse || cleanResponse.length < 5) {
       if (event) {
         cleanResponse = `I'll add "${event.title}" to your calendar.`;
@@ -249,7 +184,7 @@ Deno.serve(async (req) => {
         const { data, error } = await supabase
           .from('events')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', user.id)
           .gte('start_time', todayStart.toISOString())
           .lte('start_time', endDate.toISOString())
           .order('start_time');
@@ -260,7 +195,7 @@ Deno.serve(async (req) => {
           events = data;
         }
       } catch (error) {
-        console.error('Error processing request:', error);
+        console.error('Error processing schedule query:', error);
       }
     }
 
@@ -277,7 +212,11 @@ Deno.serve(async (req) => {
     console.error('Error processing request:', error);
     
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ 
+        error: 'Internal server error', 
+        details: error.toString(),
+        message: "I'm sorry, I couldn't process your request right now. Please try again later."
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

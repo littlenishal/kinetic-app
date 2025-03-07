@@ -241,6 +241,8 @@ const handleSendMessage = async (e: React.FormEvent) => {
   }
 };
 
+  // This is the updated handleConfirmEvent function for the ChatInterface component
+
   const handleConfirmEvent = async () => {
     // Logic to confirm and save the event to the database
     if (!eventPreview) return;
@@ -249,14 +251,86 @@ const handleSendMessage = async (e: React.FormEvent) => {
     if (!user) return;
     
     try {
+      // Create a proper date object from the preview data
+      // This ensures we have a valid date-time to save in the database
+      const eventDate = eventPreview.date;
+      
+      // Extract start time or use default
+      let startTime = eventDate;
+      if (eventPreview.startTime) {
+        // Try to parse the time from the string
+        try {
+          const timeParts = eventPreview.startTime.match(/(\d+):(\d+)\s*([AP]M)?/i);
+          if (timeParts) {
+            let hours = parseInt(timeParts[1], 10);
+            const minutes = parseInt(timeParts[2], 10);
+            const period = timeParts[3] ? timeParts[3].toUpperCase() : null;
+            
+            // Convert 12-hour format to 24-hour if needed
+            if (period === 'PM' && hours < 12) hours += 12;
+            if (period === 'AM' && hours === 12) hours = 0;
+            
+            startTime = new Date(eventDate);
+            startTime.setHours(hours, minutes, 0, 0);
+          }
+        } catch (error) {
+          console.error('Error parsing start time:', error);
+          // Fall back to date without specific time
+        }
+      }
+      
+      // Calculate end time if available
+      let endTime = null;
+      if (eventPreview.endTime) {
+        try {
+          const timeParts = eventPreview.endTime.match(/(\d+):(\d+)\s*([AP]M)?/i);
+          if (timeParts) {
+            let hours = parseInt(timeParts[1], 10);
+            const minutes = parseInt(timeParts[2], 10);
+            const period = timeParts[3] ? timeParts[3].toUpperCase() : null;
+            
+            // Convert 12-hour format to 24-hour if needed
+            if (period === 'PM' && hours < 12) hours += 12;
+            if (period === 'AM' && hours === 12) hours = 0;
+            
+            endTime = new Date(eventDate);
+            endTime.setHours(hours, minutes, 0, 0);
+          }
+        } catch (error) {
+          console.error('Error parsing end time:', error);
+        }
+      }
+      
+      // Prepare recurrence pattern if needed
+      let recurrencePattern = null;
+      if (eventPreview.isRecurring && eventPreview.recurrencePattern) {
+        try {
+          // If it's a JSON string, parse it
+          if (typeof eventPreview.recurrencePattern === 'string' && 
+              eventPreview.recurrencePattern.startsWith('{')) {
+            recurrencePattern = JSON.parse(eventPreview.recurrencePattern);
+          } else {
+            // Otherwise use it as a string description
+            recurrencePattern = { description: eventPreview.recurrencePattern };
+          }
+        } catch (error) {
+          console.error('Error parsing recurrence pattern:', error);
+          recurrencePattern = { description: eventPreview.recurrencePattern };
+        }
+      }
+      
       // Save event to Supabase
       const { data, error } = await supabase
         .from('events')
         .insert({
           user_id: user.id,
           title: eventPreview.title,
-          start_time: eventPreview.date,
-          location: eventPreview.location,
+          description: '', // Add a description field if needed
+          start_time: startTime.toISOString(),
+          end_time: endTime ? endTime.toISOString() : null,
+          location: eventPreview.location || null,
+          is_recurring: eventPreview.isRecurring || false,
+          recurrence_pattern: recurrencePattern,
           source: 'chat'
         });
         
