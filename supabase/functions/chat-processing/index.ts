@@ -19,38 +19,27 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get request details for debugging
-    console.log("Request method:", req.method);
-    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
-
     // Get Supabase URL and anon key from environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("Missing environment variables:", { supabaseUrl: !!supabaseUrl, supabaseAnonKey: !!supabaseAnonKey });
+      console.error("Missing environment variables");
       throw new Error('Missing Supabase environment variables');
     }
 
-    // Extract JWT token from Authorization header
-    const authHeader = req.headers.get('Authorization');
-    console.log("Auth header:", authHeader ? "Present" : "Missing");
-
-    // Create Supabase client with the JWT token
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: authHeader || '',
-        },
-      },
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
-
-    // Parse the request body
-    const { message, conversation_history } = await req.json();
+    // Parse the request body first to get the message
+    let message, conversation_history;
+    try {
+      const body = await req.json();
+      message = body.message;
+      conversation_history = body.conversation_history;
+    } catch (error) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid request body', details: error.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     if (!message) {
       return new Response(
@@ -58,11 +47,56 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    // Verify the user is authenticated
-    const { data, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
+
+    // Extract JWT token from Authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // *** Key change: Create a custom fetch function to pass the auth header ***
+    const customFetch = (url, options = {}) => {
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          Authorization: authHeader,
+        },
+      });
+    };
+
+    // Create Supabase client with the JWT token and custom fetch
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+      global: {
+        fetch: customFetch,
+      },
+    });
+
+    // Verify the user is authenticated using the admin API directly
+    let userId;
+    try {
+      // Extract token from the Authorization header (remove 'Bearer ' prefix)
+      const token = authHeader.replace('Bearer ', '');
+      
+      // Use the admin API to get user from JWT
+      const adminAuthClient = supabase.auth.admin;
+      const { data, error } = await adminAuthClient.getUserById(token);
+      
+      if (error || !data?.user) {
+        throw new Error(error?.message || 'User not found');
+      }
+      
+      userId = data.user.id;
+      console.log("Authenticated user:", userId);
+    } catch (authError) {
       console.error("Auth error:", authError);
       return new Response(
         JSON.stringify({ 
@@ -74,20 +108,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!data.user) {
-      console.error("No user found in the session");
-      return new Response(
-        JSON.stringify({ 
-          error: 'Unauthorized', 
-          details: 'No user found in the session',
-          message: "Authentication failed. Please sign in again."
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log("Authenticated user:", data.user.id);
-    
     // Initialize OpenAI client
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
@@ -107,7 +127,7 @@ Deno.serve(async (req) => {
       }));
     }
     
-    // Build improved system prompt with explicit instructions
+    // Build system prompt with explicit instructions
     const systemPrompt = `You are a helpful AI assistant for a family management app. 
     Help the user manage their calendar events and answer questions about their schedule.
     
@@ -237,7 +257,7 @@ Deno.serve(async (req) => {
         const { data, error } = await supabase
           .from('events')
           .select('*')
-          .eq('user_id', data.user.id)
+          .eq('user_id', userId)
           .gte('start_time', todayStart.toISOString())
           .lte('start_time', endDate.toISOString())
           .order('start_time');
