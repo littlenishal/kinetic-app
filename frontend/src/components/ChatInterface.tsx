@@ -246,13 +246,18 @@ const handleSendMessage = async (e: React.FormEvent) => {
   } catch (error) {
     console.error('Error processing message:', error);
     
-    // Add error message to chat
+    // Add error message to chat with the correct type
     const errorMessage: Message = {
       id: Date.now().toString(),
-      role: 'assistant',
-      content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
+      role: 'assistant', // Must be specifically 'assistant', not a general string
+      content: `Sorry, I encountered an error. Please try again.`,
       timestamp: new Date()
     };
+    
+    // If we know it's an Error object, include the message
+    if (error instanceof Error) {
+      errorMessage.content = `Sorry, I encountered an error: ${error.message}. Please try again.`;
+    }
     
     setMessages(prevMessages => [...prevMessages, errorMessage]);
   } finally {
