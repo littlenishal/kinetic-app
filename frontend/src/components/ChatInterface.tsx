@@ -113,7 +113,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
-    if (!session?.access_token) {
+    if (!session) {
       throw new Error('No valid session found');
     }
     
@@ -122,7 +122,9 @@ const handleSendMessage = async (e: React.FormEvent) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Include both authorization methods to ensure compatibility
         'Authorization': `Bearer ${session.access_token}`,
+        'apikey': process.env.REACT_APP_SUPABASE_ANON_KEY || '',
       },
       body: JSON.stringify({
         message: inputMessage,

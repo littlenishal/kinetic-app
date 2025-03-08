@@ -5,7 +5,8 @@ import OpenAI from 'https://esm.sh/openai@4.0.0';
 // CORS headers for all responses
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 // Initialize OpenAI client
@@ -16,7 +17,10 @@ const openai = new OpenAI({
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { 
+      headers: corsHeaders,
+      status: 200
+    });
   }
 
   try {
@@ -30,9 +34,14 @@ Deno.serve(async (req) => {
 
     // Extract the JWT token from the Authorization header
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    const apiKey = req.headers.get('apikey');
+
+    if (!authHeader && !apiKey) {
       return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
+        JSON.stringify({ 
+          error: 'Missing authentication credentials',
+          details: 'Either Authorization header or apikey is required' 
+        }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -41,12 +50,14 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
-          Authorization: authHeader,
+          Authorization: authHeader || '',
+          apikey: apiKey || '',
         },
       },
     });
 
     // Parse the request body
+    /* -- Commenting out for now
     const { message, conversation_history } = await req.json();
     
     if (!message) {
@@ -55,17 +66,34 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+    */
+
     // Verify the user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (authError || !user) {
+    if (authError) {
+      console.error('Auth error:', authError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: authError?.message }),
+        JSON.stringify({ 
+          error: 'Unauthorized', 
+          details: authError.message,
+          message: "Authentication failed. Please sign in again."
+        }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
+    if (!user) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Unauthorized', 
+          details: 'User not found',
+          message: "Authentication failed. Please sign in again."
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Build conversation context for OpenAI
     let conversationContext = [];
     if (conversation_history && Array.isArray(conversation_history)) {
