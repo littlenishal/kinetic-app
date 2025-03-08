@@ -19,6 +19,11 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Get request details for debugging
+    console.log("Request method:", req.method);
+    const headerEntries = Array.from(req.headers.entries());
+    console.log("Request headers:", headerEntries.map(([key]) => key).join(', '));
+
     // Get Supabase URL and anon key from environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
@@ -57,56 +62,28 @@ Deno.serve(async (req) => {
       );
     }
 
-    // *** Key change: Create a custom fetch function to pass the auth header ***
-    const customFetch = (url, options = {}) => {
-      return fetch(url, {
-        ...options,
-        headers: {
-          ...options.headers,
-          Authorization: authHeader,
-        },
-      });
-    };
+    // Create Supabase client with the JWT token
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    // Create Supabase client with the JWT token and custom fetch
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-      global: {
-        fetch: customFetch,
-      },
-    });
+    // Get user information with the provided JWT
+    const { data: { user }, error: authError } = await supabase.auth.getUser(
+      authHeader.replace('Bearer ', '')
+    );
 
-    // Verify the user is authenticated using the admin API directly
-    let userId;
-    try {
-      // Extract token from the Authorization header (remove 'Bearer ' prefix)
-      const token = authHeader.replace('Bearer ', '');
-      
-      // Use the admin API to get user from JWT
-      const adminAuthClient = supabase.auth.admin;
-      const { data, error } = await adminAuthClient.getUserById(token);
-      
-      if (error || !data?.user) {
-        throw new Error(error?.message || 'User not found');
-      }
-      
-      userId = data.user.id;
-      console.log("Authenticated user:", userId);
-    } catch (authError) {
-      console.error("Auth error:", authError);
+    if (authError || !user) {
+      console.error("Auth error:", authError || "No user found");
       return new Response(
         JSON.stringify({ 
           error: 'Unauthorized', 
-          details: authError.message,
+          details: authError?.message || "No user found",
           message: "Authentication failed. Please sign in again."
         }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // User is authenticated, proceed with message processing
+    console.log("Authenticated user:", user.id);
 
     // Initialize OpenAI client
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -257,7 +234,7 @@ Deno.serve(async (req) => {
         const { data, error } = await supabase
           .from('events')
           .select('*')
-          .eq('user_id', userId)
+          .eq('user_id', user.id)
           .gte('start_time', todayStart.toISOString())
           .lte('start_time', endDate.toISOString())
           .order('start_time');
