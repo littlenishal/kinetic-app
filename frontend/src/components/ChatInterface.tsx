@@ -111,26 +111,40 @@ const handleSendMessage = async (e: React.FormEvent) => {
   setLoading(true);
   
   try {
+    // Get a fresh session
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (!session) {
       throw new Error('No valid session found');
     }
+
+    // For debugging - log session info (Remove in production)
+    console.log('Session data:', {
+      hasAccessToken: !!session.access_token,
+      tokenLength: session.access_token?.length || 0,
+      expiresAt: session.expires_at,
+      tokenType: session.token_type,
+    });
     
+    // Define the endpoint
+    const endpoint = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`;
+    console.log('Calling edge function at:', endpoint);
+
     // Call Supabase Edge Function with proper URL and auth
-    const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`, {
+    // Call Supabase Edge Function with proper URL and auth
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Include both authorization methods to ensure compatibility
         'Authorization': `Bearer ${session.access_token}`,
-        'apikey': process.env.REACT_APP_SUPABASE_ANON_KEY || '',
       },
       body: JSON.stringify({
         message: inputMessage,
         conversation_history: messages.slice(-10) // Send last 10 messages for context
       }),
     });
+    
+    console.log('Response status:', response.status);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -223,14 +237,26 @@ const handleSendMessage = async (e: React.FormEvent) => {
     }
     
     // Save conversation to Supabase
-    const allMessages = [...messages, userMessage, assistantMessage];
-    await supabase
-      .from('conversations')
-      .upsert({
-        user_id: user.id,
-        messages: allMessages,
-        updated_at: new Date()
-      });
+    try {
+      const allMessages = [...messages, userMessage, assistantMessage];
+      console.log('Saving conversation to Supabase...');
+      
+      const { error: conversationError } = await supabase
+        .from('conversations')
+        .upsert({
+          user_id: user.id,
+          messages: allMessages,
+          updated_at: new Date().toISOString() // Use ISO string for consistency
+        });
+        
+      if (conversationError) {
+        console.error('Error saving conversation:', conversationError);
+        // Don't throw here to avoid interrupting the user experience
+        // just log the error
+      }
+    } catch (saveError) {
+      console.error('Error in conversation save operation:', saveError);
+    }
     
   } catch (error) {
     console.error('Error processing message:', error);
