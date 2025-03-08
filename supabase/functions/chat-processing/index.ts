@@ -9,11 +9,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
-});
-
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -24,40 +19,37 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Get request details for debugging
+    console.log("Request method:", req.method);
+    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
+
     // Get Supabase URL and anon key from environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     
     if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("Missing environment variables:", { supabaseUrl: !!supabaseUrl, supabaseAnonKey: !!supabaseAnonKey });
       throw new Error('Missing Supabase environment variables');
     }
 
-    // Extract the JWT token from the Authorization header
+    // Extract JWT token from Authorization header
     const authHeader = req.headers.get('Authorization');
-    const apiKey = req.headers.get('apikey');
-
-    if (!authHeader && !apiKey) {
-      return new Response(
-        JSON.stringify({ 
-          error: 'Missing authentication credentials',
-          details: 'Either Authorization header or apikey is required' 
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log("Auth header:", authHeader ? "Present" : "Missing");
 
     // Create Supabase client with the JWT token
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
           Authorization: authHeader || '',
-          apikey: apiKey || '',
         },
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
     });
 
     // Parse the request body
-    /* -- Commenting out for now
     const { message, conversation_history } = await req.json();
     
     if (!message) {
@@ -66,13 +58,12 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    */
-
+    
     // Verify the user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data, error: authError } = await supabase.auth.getUser();
     
     if (authError) {
-      console.error('Auth error:', authError);
+      console.error("Auth error:", authError);
       return new Response(
         JSON.stringify({ 
           error: 'Unauthorized', 
@@ -82,18 +73,31 @@ Deno.serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    if (!user) {
+
+    if (!data.user) {
+      console.error("No user found in the session");
       return new Response(
         JSON.stringify({ 
           error: 'Unauthorized', 
-          details: 'User not found',
+          details: 'No user found in the session',
           message: "Authentication failed. Please sign in again."
         }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log("Authenticated user:", data.user.id);
+    
+    // Initialize OpenAI client
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      throw new Error('Missing OpenAI API key');
+    }
+
+    const openai = new OpenAI({
+      apiKey: openaiApiKey,
+    });
+    
     // Build conversation context for OpenAI
     let conversationContext = [];
     if (conversation_history && Array.isArray(conversation_history)) {
@@ -233,7 +237,7 @@ Deno.serve(async (req) => {
         const { data, error } = await supabase
           .from('events')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', data.user.id)
           .gte('start_time', todayStart.toISOString())
           .lte('start_time', endDate.toISOString())
           .order('start_time');
