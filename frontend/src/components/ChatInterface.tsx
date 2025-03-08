@@ -86,14 +86,15 @@ const ChatInterface: React.FC = () => {
 
 // Inside the ChatInterface component:
 
+// Update this function in your ChatInterface.tsx file
 const handleSendMessage = async (e: React.FormEvent) => {
   e.preventDefault();
   
   if (!inputMessage.trim()) return;
   
+  // Get user information
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    // Handle unauthenticated state
     alert('Please sign in to continue');
     return;
   }
@@ -111,27 +112,18 @@ const handleSendMessage = async (e: React.FormEvent) => {
   setLoading(true);
   
   try {
-    // Get a fresh session
+    // Get a fresh JWT token
     const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session) {
+    
+    if (!session?.access_token) {
+      console.error('No access token found in session');
       throw new Error('No valid session found');
     }
-
-    // For debugging - log session info (Remove in production)
-    console.log('Session data:', {
-      hasAccessToken: !!session.access_token,
-      tokenLength: session.access_token?.length || 0,
-      expiresAt: session.expires_at,
-      tokenType: session.token_type,
-    });
     
     // Define the endpoint
     const endpoint = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`;
-    console.log('Calling edge function at:', endpoint);
-
-    // Call Supabase Edge Function with proper URL and auth
-    // Call Supabase Edge Function with proper URL and auth
+    
+    // Call Supabase Edge Function with proper authentication
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -144,12 +136,18 @@ const handleSendMessage = async (e: React.FormEvent) => {
       }),
     });
     
-    console.log('Response status:', response.status);
-    
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Error response:', response.status, errorData);
-      throw new Error(`Server responded with status ${response.status}: ${errorData.error || 'Unknown error'}`);
+      let errorMessage = `Server responded with status ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch (parseError) {
+        console.error('Could not parse error response');
+      }
+      
+      throw new Error(errorMessage);
     }
   
     const data = await response.json();
@@ -166,19 +164,16 @@ const handleSendMessage = async (e: React.FormEvent) => {
     
     // If the response includes an event preview, show it
     if (data.event) {
-      // Create a base date object from the date string, but don't use for time display
+      // Create a base date object from the date string
       let eventDate: Date;
   
       try {
-        // If we have a date string like "2025-03-08"
         if (typeof data.event.date === 'string' && data.event.date.includes('-')) {
           const [year, month, day] = data.event.date.split('-').map(Number);
           eventDate = new Date(year, month - 1, day);
         } else if (data.event.start_time instanceof Date) {
-          // If it's already a Date object
           eventDate = new Date(data.event.start_time);
         } else {
-          // Fallback to current date
           eventDate = new Date();
         }
       } catch (error) {
@@ -186,29 +181,22 @@ const handleSendMessage = async (e: React.FormEvent) => {
         eventDate = new Date();
       }
       
-      // IMPORTANT: Use the original time strings directly from the LLM
-      // This preserves the user's requested times without timezone conversion issues
-      
-      // Format times for direct display in 12-hour format with AM/PM
-      // Format from "HH:MM" (24hr) to "H:MM AM/PM" (12hr) if needed
+      // Format times for display
       let displayStartTime = data.event.original_start_time || data.event.start_time;
       let displayEndTime = data.event.original_end_time || data.event.end_time;
       
       // Convert 24-hour format to 12-hour if needed
       if (displayStartTime && displayStartTime.includes(':') && !displayStartTime.toLowerCase().includes('am') && !displayStartTime.toLowerCase().includes('pm')) {
-        // Convert from 24h to 12h format
         try {
           const [hours, minutes] = displayStartTime.split(':').map(Number);
           const period = hours >= 12 ? 'PM' : 'AM';
           const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
           displayStartTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
         } catch (error) {
-          // Keep original if conversion fails
           console.error('Error formatting start time:', error);
         }
       }
       
-      // Same for end time
       if (displayEndTime && displayEndTime.includes(':') && !displayEndTime.toLowerCase().includes('am') && !displayEndTime.toLowerCase().includes('pm')) {
         try {
           const [hours, minutes] = displayEndTime.split(':').map(Number);
@@ -220,10 +208,10 @@ const handleSendMessage = async (e: React.FormEvent) => {
         }
       }
       
-      // Set the event preview with corrected date information
+      // Set the event preview
       setEventPreview({
         title: data.event.title,
-        date: eventDate, // Use Date object only for the date part
+        date: eventDate,
         startTime: displayStartTime,
         endTime: displayEndTime,
         location: data.event.location,
@@ -239,20 +227,17 @@ const handleSendMessage = async (e: React.FormEvent) => {
     // Save conversation to Supabase
     try {
       const allMessages = [...messages, userMessage, assistantMessage];
-      console.log('Saving conversation to Supabase...');
       
       const { error: conversationError } = await supabase
         .from('conversations')
         .upsert({
           user_id: user.id,
           messages: allMessages,
-          updated_at: new Date().toISOString() // Use ISO string for consistency
+          updated_at: new Date().toISOString()
         });
         
       if (conversationError) {
         console.error('Error saving conversation:', conversationError);
-        // Don't throw here to avoid interrupting the user experience
-        // just log the error
       }
     } catch (saveError) {
       console.error('Error in conversation save operation:', saveError);
@@ -265,7 +250,7 @@ const handleSendMessage = async (e: React.FormEvent) => {
     const errorMessage: Message = {
       id: Date.now().toString(),
       role: 'assistant',
-      content: 'Sorry, I encountered an error. Please try again.',
+      content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
       timestamp: new Date()
     };
     
