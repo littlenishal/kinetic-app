@@ -92,7 +92,6 @@ export const getEventDuration = (startDate: Date, endDate: Date): number => {
   if (!(startDate instanceof Date) || !(endDate instanceof Date) || 
       isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
     console.error('Invalid dates passed to getEventDuration:', startDate, endDate);
-    return.apply;
     return 0;
   }
 
@@ -208,93 +207,6 @@ export const getCurrentWeekRange = (): { start: Date, end: Date } => {
   endOfWeek.setHours(23, 59, 59, 999);
   
   return { start: startOfWeek, end: endOfWeek };
-};
-
-/**
- * Get the next occurrence of a specific day of the week
- * 
- * @param dayName - The day name (e.g., 'Sunday', 'Monday', etc.)
- * @returns Date object representing the next occurrence of that day
- */
-export const getNextDayOfWeek = (dayName: string): Date => {
-  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const targetDay = dayNames.findIndex(day => day.toLowerCase() === dayName.toLowerCase());
-  
-  if (targetDay === -1) {
-    console.error(`Invalid day name: ${dayName}`);
-    return new Date(); // Return today if invalid day name
-  }
-  
-  const today = new Date();
-  const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  
-  // Calculate days to add
-  // If today is the target day, return next week's occurrence
-  let daysToAdd = targetDay - currentDay;
-  if (daysToAdd <= 0) {
-    daysToAdd += 7;
-  }
-  
-  const nextOccurrence = new Date(today);
-  nextOccurrence.setDate(today.getDate() + daysToAdd);
-  nextOccurrence.setHours(0, 0, 0, 0);
-  
-  return nextOccurrence;
-};
-
-/**
- * Parse a natural language date reference
- * Handles relative dates like "today", "tomorrow", "next Monday", etc.
- * 
- * @param dateText - The natural language date reference
- * @returns Date object for the referenced date
- */
-export const parseNaturalDate = (dateText: string): Date => {
-  const today = new Date();
-  const text = dateText.toLowerCase().trim();
-  
-  // Handle "today"
-  if (text === 'today') {
-    return new Date();
-  }
-  
-  // Handle "tomorrow"
-  if (text === 'tomorrow') {
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
-    return tomorrow;
-  }
-  
-  // Handle day names (e.g., "Sunday", "Monday")
-  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  for (const dayName of dayNames) {
-    if (text.includes(dayName)) {
-      return getNextDayOfWeek(dayName);
-    }
-  }
-  
-  // Handle "next week"
-  if (text.includes('next week')) {
-    const nextWeek = new Date();
-    nextWeek.setDate(today.getDate() + 7);
-    return nextWeek;
-  }
-  
-  // Try standard date parsing as a fallback
-  try {
-    const date = new Date(dateText);
-    if (!isNaN(date.getTime())) {
-      return date;
-    }
-  } catch (e) {
-    console.error('Error parsing natural date:', e);
-  }
-  
-  // Return tomorrow as a reasonable default if parsing fails
-  console.warn(`Could not parse natural date: "${dateText}". Using tomorrow as fallback.`);
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-  return tomorrow;
 };
 
 /**
