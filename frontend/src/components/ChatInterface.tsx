@@ -13,7 +13,7 @@ interface Message {
 }
 
 // Optional event preview component that appears when events are detected
-interface EventPreview {
+interface EventPreviewData {
   title: string;
   date: Date;
   startTime?: string;
@@ -27,7 +27,7 @@ const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [eventPreview, setEventPreview] = useState<EventPreview | null>(null);
+  const [eventPreview, setEventPreview] = useState<EventPreviewData | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -81,191 +81,162 @@ const ChatInterface: React.FC = () => {
     setInputMessage(e.target.value);
   };
 
-  // This is the relevant part of the ChatInterface.tsx file that needs updating
-// The full component remains the same, just the handleSendMessage function needs to be updated
-
-// Inside the ChatInterface component:
-
-// Update this function in your ChatInterface.tsx file
-const handleSendMessage = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  if (!inputMessage.trim()) return;
-  
-  // Get user information
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    alert('Please sign in to continue');
-    return;
-  }
-  
-  // Add user message to the chat
-  const userMessage: Message = {
-    id: Date.now().toString(),
-    role: 'user',
-    content: inputMessage,
-    timestamp: new Date()
-  };
-  
-  setMessages(prevMessages => [...prevMessages, userMessage]);
-  setInputMessage('');
-  setLoading(true);
-  
-  try {
-    // Get a fresh JWT token
-    const { data: { session } } = await supabase.auth.getSession();
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    if (!session?.access_token) {
-      console.error('No access token found in session');
-      throw new Error('No valid session found');
+    if (!inputMessage.trim()) return;
+    
+    // Get user information
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('Please sign in to continue');
+      return;
     }
     
-    // Define the endpoint
-    const endpoint = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`;
-    
-    // Call Supabase Edge Function with proper authentication
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        message: inputMessage,
-        conversation_history: messages.slice(-10) // Send last 10 messages for context
-      }),
-    });
-    
-    if (!response.ok) {
-      let errorMessage = `Server responded with status ${response.status}`;
-      
-      try {
-        const errorData = await response.json();
-        console.error('Error response:', errorData);
-        errorMessage = errorData.message || errorData.error || errorMessage;
-      } catch (parseError) {
-        console.error('Could not parse error response');
-      }
-      
-      throw new Error(errorMessage);
-    }
-  
-    const data = await response.json();
-    
-    // Add assistant response to the chat
-    const assistantMessage: Message = {
+    // Add user message to the chat
+    const userMessage: Message = {
       id: Date.now().toString(),
-      role: 'assistant',
-      content: data.message,
+      role: 'user',
+      content: inputMessage,
       timestamp: new Date()
     };
     
-    setMessages(prevMessages => [...prevMessages, assistantMessage]);
+    setMessages(prevMessages => [...prevMessages, userMessage]);
+    setInputMessage('');
+    setLoading(true);
     
-    // If the response includes an event preview, show it
-    if (data.event) {
-      // Create a base date object from the date string
-      let eventDate: Date;
-  
-      try {
-        if (typeof data.event.date === 'string' && data.event.date.includes('-')) {
-          const [year, month, day] = data.event.date.split('-').map(Number);
-          eventDate = new Date(year, month - 1, day);
-        } else if (data.event.start_time instanceof Date) {
-          eventDate = new Date(data.event.start_time);
-        } else {
-          eventDate = new Date();
-        }
-      } catch (error) {
-        console.error('Error parsing date:', error);
-        eventDate = new Date();
-      }
-      
-      // Format times for display
-      let displayStartTime = data.event.original_start_time || data.event.start_time;
-      let displayEndTime = data.event.original_end_time || data.event.end_time;
-      
-      // Convert 24-hour format to 12-hour if needed
-      if (displayStartTime && displayStartTime.includes(':') && !displayStartTime.toLowerCase().includes('am') && !displayStartTime.toLowerCase().includes('pm')) {
-        try {
-          const [hours, minutes] = displayStartTime.split(':').map(Number);
-          const period = hours >= 12 ? 'PM' : 'AM';
-          const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
-          displayStartTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-        } catch (error) {
-          console.error('Error formatting start time:', error);
-        }
-      }
-      
-      if (displayEndTime && displayEndTime.includes(':') && !displayEndTime.toLowerCase().includes('am') && !displayEndTime.toLowerCase().includes('pm')) {
-        try {
-          const [hours, minutes] = displayEndTime.split(':').map(Number);
-          const period = hours >= 12 ? 'PM' : 'AM';
-          const displayHours = hours % 12 || 12;
-          displayEndTime = `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
-        } catch (error) {
-          console.error('Error formatting end time:', error);
-        }
-      }
-      
-      // Set the event preview
-      setEventPreview({
-        title: data.event.title,
-        date: eventDate,
-        startTime: displayStartTime,
-        endTime: displayEndTime,
-        location: data.event.location,
-        isRecurring: data.event.is_recurring || false,
-        recurrencePattern: data.event.recurrence_pattern 
-          ? (typeof data.event.recurrence_pattern === 'string' 
-              ? data.event.recurrence_pattern 
-              : JSON.stringify(data.event.recurrence_pattern))
-          : undefined
-      });
-    }
-    
-    // Save conversation to Supabase
     try {
-      const allMessages = [...messages, userMessage, assistantMessage];
+      // Get a fresh JWT token
+      const { data: { session } } = await supabase.auth.getSession();
       
-      const { error: conversationError } = await supabase
-        .from('conversations')
-        .upsert({
-          user_id: user.id,
-          messages: allMessages,
-          updated_at: new Date().toISOString()
+      if (!session?.access_token) {
+        console.error('No access token found in session');
+        throw new Error('No valid session found');
+      }
+      
+      // Define the endpoint
+      const endpoint = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`;
+      
+      // Call Supabase Edge Function with proper authentication
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          message: inputMessage,
+          conversation_history: messages.slice(-10) // Send last 10 messages for context
+        }),
+      });
+      
+      if (!response.ok) {
+        let errorMessage = `Server responded with status ${response.status}`;
+        
+        try {
+          const errorData = await response.json();
+          console.error('Error response:', errorData);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (parseError) {
+          console.error('Could not parse error response');
+        }
+        
+        throw new Error(errorMessage);
+      }
+  
+      const data = await response.json();
+      console.log("Response from chat processing:", data);
+      
+      // Add assistant response to the chat
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: data.message,
+        timestamp: new Date()
+      };
+      
+      setMessages(prevMessages => [...prevMessages, assistantMessage]);
+      
+      // If the response includes an event preview, show it
+      if (data.event) {
+        console.log("Event data received:", data.event);
+        
+        // Create a base date object from the date string
+        let eventDate: Date;
+  
+        try {
+          if (typeof data.event.date === 'string' && data.event.date.includes('-')) {
+            // Parse YYYY-MM-DD format
+            const [year, month, day] = data.event.date.split('-').map(Number);
+            eventDate = new Date(year, month - 1, day);
+          } else if (data.event.start_time && data.event.start_time instanceof Date) {
+            eventDate = new Date(data.event.start_time);
+          } else {
+            // Default to tomorrow if we can't parse a date
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            eventDate = tomorrow;
+          }
+        } catch (error) {
+          console.error('Error parsing date:', error);
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          eventDate = tomorrow;
+        }
+        
+        // Set the event preview with all available data
+        setEventPreview({
+          title: data.event.title || "New Event",
+          date: eventDate,
+          startTime: data.event.start_time || "",
+          endTime: data.event.end_time || "",
+          location: data.event.location || "",
+          isRecurring: data.event.is_recurring || false,
+          recurrencePattern: data.event.recurrence_pattern || ""
         });
         
-      if (conversationError) {
-        console.error('Error saving conversation:', conversationError);
+        console.log("Event preview set:", eventPreview);
       }
-    } catch (saveError) {
-      console.error('Error in conversation save operation:', saveError);
+      
+      // Save conversation to Supabase
+      try {
+        const allMessages = [...messages, userMessage, assistantMessage];
+        
+        const { error: conversationError } = await supabase
+          .from('conversations')
+          .upsert({
+            user_id: user.id,
+            messages: allMessages,
+            updated_at: new Date().toISOString()
+          });
+          
+        if (conversationError) {
+          console.error('Error saving conversation:', conversationError);
+        }
+      } catch (saveError) {
+        console.error('Error in conversation save operation:', saveError);
+      }
+      
+    } catch (error) {
+      console.error('Error processing message:', error);
+      
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `Sorry, I encountered an error. Please try again.`,
+        timestamp: new Date()
+      };
+      
+      if (error instanceof Error) {
+        errorMessage.content = `Sorry, I encountered an error: ${error.message}. Please try again.`;
+      }
+      
+      setMessages(prevMessages => [...prevMessages, errorMessage]);
+    } finally {
+      setLoading(false);
     }
-    
-  } catch (error) {
-    console.error('Error processing message:', error);
-    
-    // Add error message to chat with the correct type
-    const errorMessage: Message = {
-      id: Date.now().toString(),
-      role: 'assistant', // Must be specifically 'assistant', not a general string
-      content: `Sorry, I encountered an error. Please try again.`,
-      timestamp: new Date()
-    };
-    
-    // If we know it's an Error object, include the message
-    if (error instanceof Error) {
-      errorMessage.content = `Sorry, I encountered an error: ${error.message}. Please try again.`;
-    }
-    
-    setMessages(prevMessages => [...prevMessages, errorMessage]);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // This is the updated handleConfirmEvent function for the ChatInterface component
+  };
 
   const handleConfirmEvent = async () => {
     // Logic to confirm and save the event to the database
@@ -276,7 +247,6 @@ const handleSendMessage = async (e: React.FormEvent) => {
     
     try {
       // Create a proper date object from the preview data
-      // This ensures we have a valid date-time to save in the database
       const eventDate = eventPreview.date;
       
       // Extract start time or use default
@@ -284,10 +254,10 @@ const handleSendMessage = async (e: React.FormEvent) => {
       if (eventPreview.startTime) {
         // Try to parse the time from the string
         try {
-          const timeParts = eventPreview.startTime.match(/(\d+):(\d+)\s*([AP]M)?/i);
+          const timeParts = eventPreview.startTime.match(/(\d+):?(\d+)?\s*([AP]M)?/i);
           if (timeParts) {
             let hours = parseInt(timeParts[1], 10);
-            const minutes = parseInt(timeParts[2], 10);
+            const minutes = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
             const period = timeParts[3] ? timeParts[3].toUpperCase() : null;
             
             // Convert 12-hour format to 24-hour if needed
@@ -307,10 +277,10 @@ const handleSendMessage = async (e: React.FormEvent) => {
       let endTime = null;
       if (eventPreview.endTime) {
         try {
-          const timeParts = eventPreview.endTime.match(/(\d+):(\d+)\s*([AP]M)?/i);
+          const timeParts = eventPreview.endTime.match(/(\d+):?(\d+)?\s*([AP]M)?/i);
           if (timeParts) {
             let hours = parseInt(timeParts[1], 10);
-            const minutes = parseInt(timeParts[2], 10);
+            const minutes = timeParts[2] ? parseInt(timeParts[2], 10) : 0;
             const period = timeParts[3] ? timeParts[3].toUpperCase() : null;
             
             // Convert 12-hour format to 24-hour if needed
@@ -342,6 +312,15 @@ const handleSendMessage = async (e: React.FormEvent) => {
           recurrencePattern = { description: eventPreview.recurrencePattern };
         }
       }
+      
+      console.log("Saving event to database:", {
+        title: eventPreview.title,
+        start_time: startTime.toISOString(),
+        end_time: endTime ? endTime.toISOString() : null,
+        location: eventPreview.location,
+        is_recurring: eventPreview.isRecurring,
+        recurrence_pattern: recurrencePattern
+      });
       
       // Save event to Supabase
       const { data, error } = await supabase
