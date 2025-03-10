@@ -19,11 +19,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Get request details for debugging
-    console.log("Request method:", req.method);
-    const headerEntries = Array.from(req.headers.entries());
-    console.log("Request headers:", headerEntries.map(([key]) => key).join(', '));
-
     // Get Supabase URL and anon key from environment variables
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
@@ -82,9 +77,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // User is authenticated, proceed with message processing
-    console.log("Authenticated user:", user.id);
-
     // Initialize OpenAI client
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
@@ -108,35 +100,21 @@ Deno.serve(async (req) => {
     const systemPrompt = `You are a helpful AI assistant for a family management app. 
     Help the user manage their calendar events and answer questions about their schedule.
     
-    First, generate a friendly, natural language response to the user's request. 
-    DO NOT include any JSON in your visible response text.
+    You should provide a natural, conversational response to the user's requests.
     
-    Then, if the user's message contains a request to create a calendar event, append a SEPARATE JSON object
-    at the END of your response that contains the event details in this format:
+    You must NOT include any JSON or technical formatting in your human-readable response.
     
-    {
-      "intent": "create_event",
-      "event": {
-        "title": "Event title",
-        "date": "YYYY-MM-DD",
-        "start_time": "HH:MM",
-        "end_time": "HH:MM",
-        "location": "Location",
-        "is_recurring": boolean,
-        "recurrence_pattern": { details if recurring }
-      }
-    }
-
-    If the user is asking about their schedule, append this JSON at the END of your response:
+    When the user asks to create a calendar event, you should respond conversationally and
+    then our system will automatically extract the event details.
     
-    {
-      "intent": "query_schedule",
-      "time_period": "today/tomorrow/this weekend/etc"
-    }
-
-    If the message doesn't relate to calendar events, don't append any JSON.
+    Example proper response:
+    "I'll schedule your swim lessons weekly on Thursdays from 11:00 AM to 12:00 PM at Washington-Liberty High School until mid-June."
     
-    Remember: Your visible response should NEVER contain JSON. The JSON should be separate from your natural language response.
+    Example INCORRECT response (never do this):
+    "I'll schedule your swim lessons. Here are the details: **Title:** Swim Lessons, **Start Date:** 2025-03-09"
+    
+    NEVER include special formatting like "**Title:**" or JSON syntax in your visible response.
+    Just speak naturally about the event in a conversational tone.
     
     Current date and time: ${new Date().toISOString()}`;
 
@@ -157,66 +135,97 @@ Deno.serve(async (req) => {
 
     const assistantResponse = completion.choices[0].message.content || '';
     
-    // Parse potential JSON from the assistant's response
+    // Analyze the message content to extract event information if needed
     let event = null;
     let intent = null;
     
-    try {
-      // Look for JSON in the response - using a regex that matches the full JSON object
-      const jsonRegex = /{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/g;
-      const jsonMatches = assistantResponse.match(jsonRegex);
+    // If the message appears to be about creating an event
+    if (/schedule|calendar|event|appointment|meeting|lesson|class/i.test(message)) {
+      const dateMatch = /\b(tomorrow|today|\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b|\b\d{1,2}\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.test(message);
+      const timeMatch = /\b(from|at|between)?\s*\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)(?:\s*(?:to|-)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))?/i.test(message);
       
-      if (jsonMatches && jsonMatches.length > 0) {
-        // Try to parse each potential JSON match
-        for (const jsonStr of jsonMatches) {
-          try {
-            const jsonData = JSON.parse(jsonStr);
-            
-            // Check if this is a valid event or schedule intent
-            if (jsonData.intent === 'create_event' || jsonData.intent === 'query_schedule') {
-              intent = jsonData.intent;
-              
-              // If it's a create_event intent, extract the event data
-              if (intent === 'create_event' && jsonData.event) {
-                event = jsonData.event;
-                
-                // Add original time strings to preserve LLM intent
-                if (jsonData.event.start_time) {
-                  event.original_start_time = jsonData.event.start_time;
-                }
-                if (jsonData.event.end_time) {
-                  event.original_end_time = jsonData.event.end_time;
-                }
-              }
-            }
-          } catch (parseError) {
-            console.error('Error parsing JSON candidate:', parseError);
+      if (dateMatch || timeMatch || /next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i.test(message)) {
+        // It looks like an event creation request
+        intent = 'create_event';
+        
+        // Extract event information
+        let title = "";
+        let location = "";
+        let startDate = new Date();
+        let startTime = "";
+        let endTime = "";
+        let isRecurring = /weekly|every|each|recur/i.test(message);
+        let recurrencePattern = "";
+        
+        // Simple rule-based extraction (in production, you would use a more sophisticated NLP approach)
+        // Extract title (taking the first noun phrase or activity mentioned)
+        const titleMatch = message.match(/\b(?:schedule|add|create|plan|book)\s+([a-z\s]+?)(?:\s+(?:on|at|for|from|tomorrow|today|next))/i);
+        if (titleMatch && titleMatch[1]) {
+          title = titleMatch[1].trim();
+        } else {
+          // Fallback title
+          title = "Event";
+        }
+        
+        // Extract location if present
+        const locationMatch = message.match(/\bat\s+([A-Za-z0-9\s\-]+(?:School|Center|Building|Park|Place|Plaza|Street|Ave|Avenue|Road|Blvd|Boulevard|Drive|Lane))/i);
+        if (locationMatch && locationMatch[1]) {
+          location = locationMatch[1].trim();
+        }
+        
+        // Extract time
+        const timeRangeMatch = message.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))\s*(?:to|-)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))/i);
+        if (timeRangeMatch) {
+          startTime = timeRangeMatch[1].trim();
+          endTime = timeRangeMatch[2].trim();
+        } else {
+          const singleTimeMatch = message.match(/\bat\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))/i);
+          if (singleTimeMatch) {
+            startTime = singleTimeMatch[1].trim();
           }
         }
+        
+        // Extract date
+        const tomorrowMatch = /\btomorrow\b/i.test(message);
+        if (tomorrowMatch) {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          startDate = tomorrow;
+        }
+        
+        // Check for recurring pattern
+        if (isRecurring) {
+          if (/\bweekly\b/i.test(message)) {
+            recurrencePattern = "Weekly";
+          } else if (/\bevery\s+(\w+day)/i.test(message)) {
+            const dayMatch = message.match(/\bevery\s+(\w+day)/i);
+            if (dayMatch) {
+              recurrencePattern = `Weekly on ${dayMatch[1]}`;
+            }
+          } else if (/\buntil\s+([a-z\s]+)/i.test(message)) {
+            const untilMatch = message.match(/\buntil\s+([a-z\s]+)/i);
+            if (untilMatch) {
+              recurrencePattern = `Until ${untilMatch[1]}`;
+            }
+          }
+        }
+        
+        // Format the extracted information into an event object
+        event = {
+          title: title,
+          date: startDate.toISOString().split('T')[0], // YYYY-MM-DD format
+          start_time: startTime,
+          end_time: endTime,
+          location: location,
+          is_recurring: isRecurring,
+          recurrence_pattern: recurrencePattern
+        };
       }
-    } catch (error) {
-      console.error('Error processing JSON in response:', error);
+    } else if (/what'?s\s+(?:happening|scheduled|planned|on|up)/i.test(message) || /show\s+(?:me\s+)?(?:my\s+)?(?:calendar|schedule|events)/i.test(message)) {
+      // It looks like a schedule query
+      intent = 'query_schedule';
     }
-    
-    // Clean response text by removing JSON
-    let cleanResponse = assistantResponse
-      // First remove complete JSON objects
-      .replace(/{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*}/g, '')
-      // Then remove any stray closing braces that might be left
-      .replace(/\s*\}\s*\}/g, '')
-      .trim();
 
-    // Make sure we have a valid response
-    if (!cleanResponse || cleanResponse.length < 5) {
-      if (event) {
-        cleanResponse = `I'll add "${event.title}" to your calendar.`;
-      } else if (intent === 'query_schedule') {
-        cleanResponse = "I'll check your schedule and let you know what's coming up.";
-      } else {
-        cleanResponse = "I understand your request. Is there anything else you'd like me to help with?";
-      }
-    }
-    
     // If it's a schedule query, fetch relevant events
     let events = [];
     if (intent === 'query_schedule') {
@@ -251,7 +260,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        message: cleanResponse,
+        message: assistantResponse,
         intent: intent,
         event: event,
         events: events
