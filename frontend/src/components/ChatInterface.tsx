@@ -161,21 +161,51 @@ const ChatInterface: React.FC = () => {
       if (data.event) {
         console.log("Event data received:", data.event);
         
-        // Create a base date object from the date string
+        // Create a base date object from the date string or description
         let eventDate: Date;
   
         try {
-          if (typeof data.event.date === 'string' && data.event.date.includes('-')) {
-            // Parse YYYY-MM-DD format
-            const [year, month, day] = data.event.date.split('-').map(Number);
-            eventDate = new Date(year, month - 1, day);
+          if (typeof data.event.date === 'string') {
+            if (data.event.date.includes('-')) {
+              // Parse YYYY-MM-DD format
+              const [year, month, day] = data.event.date.split('-').map(Number);
+              eventDate = new Date(year, month - 1, day);
+            } else {
+              // Try to parse natural language date reference
+              eventDate = dateUtils.parseNaturalDate(data.event.date);
+            }
+          } else if (typeof data.event.date === 'object' && data.event.date instanceof Date) {
+            eventDate = new Date(data.event.date);
           } else if (data.event.start_time && data.event.start_time instanceof Date) {
             eventDate = new Date(data.event.start_time);
           } else {
-            // Default to tomorrow if we can't parse a date
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            eventDate = tomorrow;
+            // Look for day names in the user message and assistant response
+            const combinedText = `${inputMessage} ${data.message}`.toLowerCase();
+            
+            if (combinedText.includes('sunday')) {
+              eventDate = dateUtils.getNextDayOfWeek('sunday');
+            } else if (combinedText.includes('monday')) {
+              eventDate = dateUtils.getNextDayOfWeek('monday');
+            } else if (combinedText.includes('tuesday')) {
+              eventDate = dateUtils.getNextDayOfWeek('tuesday');
+            } else if (combinedText.includes('wednesday')) {
+              eventDate = dateUtils.getNextDayOfWeek('wednesday');
+            } else if (combinedText.includes('thursday')) {
+              eventDate = dateUtils.getNextDayOfWeek('thursday');
+            } else if (combinedText.includes('friday')) {
+              eventDate = dateUtils.getNextDayOfWeek('friday');
+            } else if (combinedText.includes('saturday')) {
+              eventDate = dateUtils.getNextDayOfWeek('saturday');
+            } else if (combinedText.includes('tomorrow')) {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              eventDate = tomorrow;
+            } else {
+              // Default to tomorrow if we can't parse a date
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              eventDate = tomorrow;
+            }
           }
         } catch (error) {
           console.error('Error parsing date:', error);

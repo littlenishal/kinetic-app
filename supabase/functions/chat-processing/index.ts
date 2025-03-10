@@ -143,15 +143,16 @@ Deno.serve(async (req) => {
     if (/schedule|calendar|event|appointment|meeting|lesson|class/i.test(message)) {
       const dateMatch = /\b(tomorrow|today|\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b|\b\d{1,2}\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.test(message);
       const timeMatch = /\b(from|at|between)?\s*\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)(?:\s*(?:to|-)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))?/i.test(message);
+      const dayNameMatch = /\b(?:next\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i.test(message);
       
-      if (dateMatch || timeMatch || /next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i.test(message)) {
+      if (dateMatch || timeMatch || dayNameMatch) {
         // It looks like an event creation request
         intent = 'create_event';
         
         // Extract event information
         let title = "";
         let location = "";
-        let startDate = new Date();
+        let dateReference = "";
         let startTime = "";
         let endTime = "";
         let isRecurring = /weekly|every|each|recur/i.test(message);
@@ -185,12 +186,21 @@ Deno.serve(async (req) => {
           }
         }
         
-        // Extract date
+        // Extract date reference or day name
         const tomorrowMatch = /\btomorrow\b/i.test(message);
+        const todayMatch = /\btoday\b/i.test(message);
+        
         if (tomorrowMatch) {
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          startDate = tomorrow;
+          dateReference = "tomorrow";
+        } else if (todayMatch) {
+          dateReference = "today";
+        } else {
+          // Try to extract day names
+          const dayNameRegex = /\b(?:next\s+)?(\bsunday\b|\bmonday\b|\btuesday\b|\bwednesday\b|\bthursday\b|\bfriday\b|\bsaturday\b)/i;
+          const dayNameMatch = message.match(dayNameRegex);
+          if (dayNameMatch && dayNameMatch[1]) {
+            dateReference = dayNameMatch[1].toLowerCase();
+          }
         }
         
         // Check for recurring pattern
@@ -213,7 +223,7 @@ Deno.serve(async (req) => {
         // Format the extracted information into an event object
         event = {
           title: title,
-          date: startDate.toISOString().split('T')[0], // YYYY-MM-DD format
+          date: dateReference || "tomorrow", // Send the date reference instead of a formatted date
           start_time: startTime,
           end_time: endTime,
           location: location,
