@@ -1,7 +1,8 @@
 // frontend/src/components/EventDetails.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import * as dateUtils from '../utils/dateUtils';
 import { supabase } from '../services/supabaseClient';
+import EventEditForm from './EventEditForm';
 import '../styles/EventDetails.css';
 
 interface EventDetailsProps {
@@ -17,7 +18,7 @@ interface EventDetailsProps {
   };
   onClose: () => void;
   onDelete: () => void;
-  onEdit?: () => void;
+  onEdit?: (updatedEvent: any) => void;
 }
 
 const EventDetails: React.FC<EventDetailsProps> = ({ 
@@ -26,24 +27,68 @@ const EventDetails: React.FC<EventDetailsProps> = ({
   onDelete,
   onEdit 
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
   const startDate = new Date(event.start_time);
   const endDate = event.end_time ? new Date(event.end_time) : null;
   
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
-      try {
-        const { error } = await supabase
-          .from('events')
-          .delete()
-          .eq('id', event.id);
-        
-        if (error) throw error;
-        
-        onDelete();
-      } catch (error) {
-        console.error('Error deleting event:', error);
-        alert('Failed to delete event. Please try again.');
+    if (!window.confirm('Are you sure you want to delete this event?')) {
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', event.id);
+      
+      if (error) throw error;
+      
+      onDelete();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event. Please try again.');
+      setIsDeleting(false);
+    }
+  };
+  
+  const handleEditClick = () => {
+    setIsEditing(true);
+  };
+  
+  const handleEditCancel = () => {
+    setIsEditing(false);
+  };
+  
+  const handleSaveEdit = async (updatedEvent: any) => {
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({
+          title: updatedEvent.title,
+          start_time: updatedEvent.start_time,
+          end_time: updatedEvent.end_time,
+          location: updatedEvent.location,
+          description: updatedEvent.description,
+          is_recurring: updatedEvent.is_recurring,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', event.id);
+      
+      if (error) throw error;
+      
+      if (onEdit) {
+        onEdit(updatedEvent);
+      } else {
+        onClose(); // Fall back to closing if no onEdit handler
       }
+    } catch (error) {
+      console.error('Error updating event:', error);
+      alert('Failed to update event. Please try again.');
     }
   };
   
@@ -72,6 +117,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({
         return 'Monthly';
       } else if (patternObj.frequency === 'yearly') {
         return 'Yearly';
+      } else if (patternObj.description) {
+        return patternObj.description;
       }
     } catch (e) {
       // If we can't parse it, just return the string version
@@ -80,6 +127,17 @@ const EventDetails: React.FC<EventDetailsProps> = ({
     
     return 'Recurring';
   };
+  
+  // If in edit mode, show the edit form
+  if (isEditing) {
+    return (
+      <EventEditForm 
+        event={event}
+        onSave={handleSaveEdit}
+        onCancel={handleEditCancel}
+      />
+    );
+  }
   
   return (
     <div className="event-details-modal">
@@ -139,13 +197,19 @@ const EventDetails: React.FC<EventDetailsProps> = ({
         </div>
         
         <div className="event-actions">
-          {onEdit && (
-            <button className="edit-button" onClick={onEdit}>
-              Edit
-            </button>
-          )}
-          <button className="delete-button" onClick={handleDelete}>
-            Delete
+          <button 
+            className="edit-button" 
+            onClick={handleEditClick}
+            disabled={isDeleting}
+          >
+            Edit
+          </button>
+          <button 
+            className="delete-button" 
+            onClick={handleDelete}
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       </div>

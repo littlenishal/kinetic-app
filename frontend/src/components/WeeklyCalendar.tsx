@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 import * as dateUtils from '../utils/dateUtils';
+import EventConfirmation from './EventConfirmation';
 import '../styles/WeeklyCalendar.css';
 
 interface CalendarEvent {
@@ -14,15 +15,33 @@ interface CalendarEvent {
   recurrence_pattern?: any;
 }
 
-interface WeeklyCalendarProps {
-  onEventSelect?: (event: CalendarEvent) => void;
+interface Confirmation {
+  show: boolean;
+  type: 'created' | 'updated' | 'deleted';
+  eventTitle: string;
 }
 
-const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ onEventSelect }) => {
+interface WeeklyCalendarProps {
+  onEventSelect?: (event: CalendarEvent) => void;
+  initialConfirmation?: {
+    type: 'created' | 'updated' | 'deleted';
+    eventTitle: string;
+  };
+}
+
+const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ 
+  onEventSelect,
+  initialConfirmation 
+}) => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getStartOfWeek(new Date()));
   const [error, setError] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation>({
+    show: initialConfirmation ? true : false,
+    type: initialConfirmation?.type || 'created',
+    eventTitle: initialConfirmation?.eventTitle || ''
+  });
 
   // Function to get start of the week (Sunday)
   function getStartOfWeek(date: Date): Date {
@@ -69,6 +88,11 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ onEventSelect }) => {
   // Jump to today
   const goToToday = () => {
     setCurrentWeekStart(getStartOfWeek(new Date()));
+  };
+
+  // Hide confirmation
+  const dismissConfirmation = () => {
+    setConfirmation({ ...confirmation, show: false });
   };
 
   // Get formatted time range
@@ -235,6 +259,15 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({ onEventSelect }) => {
           </div>
         ))}
       </div>
+      
+      {/* Confirmation toast */}
+      {confirmation.show && (
+        <EventConfirmation
+          type={confirmation.type}
+          eventTitle={confirmation.eventTitle}
+          onDismiss={dismissConfirmation}
+        />
+      )}
     </div>
   );
 };
