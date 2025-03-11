@@ -12,7 +12,7 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
+  timestamp: Date | string;
 }
 
 // Optional event preview component that appears when events are detected
@@ -27,12 +27,23 @@ interface EventPreviewData {
   recurrencePattern?: string;
 }
 
+// Define conversation structure to match DB schema
+interface Conversation {
+  id?: string;
+  user_id: string;
+  messages: Message[];
+  created_at?: string;
+  updated_at?: string;
+}
+
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [eventPreview, setEventPreview] = useState<EventPreviewData | null>(null);
   const [eventEditId, setEventEditId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -45,34 +56,79 @@ const ChatInterface: React.FC = () => {
   // Load conversation history from Supabase on component mount
   useEffect(() => {
     const fetchConversation = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) return;
-      
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
+      try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
         
-      if (error) {
-        console.error('Error fetching conversation:', error);
-        return;
-      }
-      
-      if (data && data.length > 0 && data[0].messages) {
-        setMessages(data[0].messages);
-      } else {
-        // Add welcome message if no conversation exists
-        setMessages([
-          {
+        if (!user) {
+          console.log("No authenticated user found");
+          return;
+        }
+        
+        console.log("Fetching conversation for user:", user.id);
+        
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+          
+        if (error) {
+          console.error('Error fetching conversation:', error);
+          return;
+        }
+        
+        console.log("Conversation fetch result:", data);
+        
+        if (data && data.length > 0 && Array.isArray(data[0].messages) && data[0].messages.length > 0) {
+          console.log(`Found ${data[0].messages.length} messages in conversation`);
+          
+          // Store the conversation ID to use for future updates
+          setConversationId(data[0].id);
+          
+          // Parse the messages and ensure timestamp is a Date object
+          const parsedMessages = data[0].messages.map((msg: Message) => ({
+            ...msg,
+            timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp)
+          }));
+          
+          setMessages(parsedMessages);
+        } else {
+          console.log("No previous conversation found, adding welcome message");
+          // Add welcome message if no conversation exists
+          const welcomeMessage: Message = {
             id: '1',
             role: 'assistant',
             content: 'Hello! I\'m your family assistant. You can create events by typing things like "Schedule soccer practice on Tuesday at 4pm" or ask me "What\'s happening this weekend?"',
             timestamp: new Date()
+          };
+          
+          setMessages([welcomeMessage]);
+          
+          // Create a new conversation in the database with the welcome message
+          const { data: newConversation, error: saveError } = await supabase
+            .from('conversations')
+            .insert({
+              user_id: user.id,
+              messages: [welcomeMessage],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select('id')
+            .single();
+            
+          if (saveError) {
+            console.error('Error creating initial conversation:', saveError);
+          } else if (newConversation) {
+            console.log('Created new conversation with ID:', newConversation.id);
+            setConversationId(newConversation.id);
           }
-        ]);
+        }
+      } catch (error) {
+        console.error('Error in fetchConversation:', error);
+      } finally {
+        setInitialized(true);
       }
     };
     
@@ -90,6 +146,76 @@ const ChatInterface: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputMessage(e.target.value);
+  };
+
+  // Function to save conversation to database
+  const saveConversation = async (messagesToSave: Message[]) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('No authenticated user found when saving conversation');
+        return false;
+      }
+      
+      // Ensure message timestamps are serialized properly
+      const processedMessages = messagesToSave.map(msg => ({
+        ...msg,
+        timestamp: msg.timestamp instanceof Date 
+          ? msg.timestamp.toISOString() 
+          : msg.timestamp
+      }));
+      
+      console.log(`Saving ${processedMessages.length} messages to conversation. ConversationId: ${conversationId}`);
+      
+      // If we have a conversation ID, update that conversation
+      if (conversationId) {
+        const { error } = await supabase
+          .from('conversations')
+          .update({
+            messages: processedMessages,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', conversationId)
+          .eq('user_id', user.id);
+          
+        if (error) {
+          console.error('Error updating conversation:', error);
+          return false;
+        }
+        
+        console.log('Conversation updated successfully');
+        return true;
+      } 
+      // Otherwise create a new conversation
+      else {
+        const { data, error } = await supabase
+          .from('conversations')
+          .insert({
+            user_id: user.id,
+            messages: processedMessages,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select('id')
+          .single();
+          
+        if (error) {
+          console.error('Error creating new conversation:', error);
+          return false;
+        }
+        
+        if (data) {
+          console.log('Created new conversation with ID:', data.id);
+          setConversationId(data.id);
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.error('Error in saveConversation:', error);
+      return false;
+    }
   };
 
   // Updated handleSendMessage function with fixes for event detection and preview
@@ -116,9 +242,13 @@ const ChatInterface: React.FC = () => {
       timestamp: new Date()
     };
     
-    setMessages(prevMessages => [...prevMessages, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInputMessage('');
     setLoading(true);
+    
+    // Save conversation with user message before API call
+    await saveConversation(updatedMessages);
     
     try {
       // Get a fresh JWT token
@@ -150,7 +280,7 @@ const ChatInterface: React.FC = () => {
         },
         body: JSON.stringify({
           message: inputMessage,
-          conversation_history: messages.slice(-10), // Send last 10 messages for context
+          conversation_history: updatedMessages.slice(-10), // Send last 10 messages for context
           search_title: searchTitle // Pass potential event title for more accurate matching
         }),
       });
@@ -190,7 +320,11 @@ const ChatInterface: React.FC = () => {
         timestamp: new Date()
       };
       
-      setMessages(prevMessages => [...prevMessages, assistantMessage]);
+      const messagesWithResponse = [...updatedMessages, assistantMessage];
+      setMessages(messagesWithResponse);
+      
+      // Save the conversation with the assistant's response
+      await saveConversation(messagesWithResponse);
       
       // ---- IMPROVED EVENT HANDLING ----
       
@@ -279,19 +413,6 @@ const ChatInterface: React.FC = () => {
         setEventPreview(newEventPreview);
       }
       
-      // Save conversation to Supabase
-      const updatedMessages = [...messages, userMessage, assistantMessage];
-      
-      await supabase
-        .from('conversations')
-        .upsert({
-          user_id: user.id,
-          messages: updatedMessages,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
-      
     } catch (error) {
       console.error('Error processing message:', error);
       
@@ -303,7 +424,16 @@ const ChatInterface: React.FC = () => {
         timestamp: new Date()
       };
       
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
+      // Update local state with error message
+      const updatedMessagesWithError = [...updatedMessages, errorMessage];
+      setMessages(updatedMessagesWithError);
+      
+      // Still save conversation with the error message
+      try {
+        await saveConversation(updatedMessagesWithError);
+      } catch (saveError) {
+        console.error('Failed to save conversation with error message:', saveError);
+      }
     } finally {
       setLoading(false);
     }
@@ -489,15 +619,7 @@ const ChatInterface: React.FC = () => {
       setEventPreview(null);
       
       // Save the updated conversation to Supabase
-      await supabase
-        .from('conversations')
-        .upsert({
-          user_id: user.id,
-          messages: updatedMessages,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
+      await saveConversation(updatedMessages);
       
     } catch (error) {
       console.error('Error saving event:', error);
@@ -516,18 +638,7 @@ const ChatInterface: React.FC = () => {
       
       // Even on error, save the conversation with the error message
       try {
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (currentUser) {
-          await supabase
-            .from('conversations')
-            .upsert({
-              user_id: currentUser.id,
-              messages: updatedMessages,
-              updated_at: new Date().toISOString()
-            }, {
-              onConflict: 'user_id'
-            });
-        }
+        await saveConversation(updatedMessages);
       } catch (saveError) {
         console.error('Failed to save conversation after event error:', saveError);
       }
@@ -574,15 +685,7 @@ const ChatInterface: React.FC = () => {
       setMessages(updatedMessages);
       
       // Save the updated conversation to Supabase
-      await supabase
-        .from('conversations')
-        .upsert({
-          user_id: user.id,
-          messages: updatedMessages,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
+      await saveConversation(updatedMessages);
       
       // Clear the edit state
       setEventEditId(null);
@@ -604,18 +707,7 @@ const ChatInterface: React.FC = () => {
       
       // Even on error, save the conversation with the error message
       try {
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (currentUser) {
-          await supabase
-            .from('conversations')
-            .upsert({
-              user_id: currentUser.id,
-              messages: updatedMessages,
-              updated_at: new Date().toISOString()
-            }, {
-              onConflict: 'user_id'
-            });
-        }
+        await saveConversation(updatedMessages);
       } catch (saveError) {
         console.error('Failed to save conversation after event update error:', saveError);
       }
@@ -644,7 +736,9 @@ const ChatInterface: React.FC = () => {
   // Log before the return statement
   console.log("Rendering ChatInterface with states:", { 
     eventEditId, 
-    eventPreview: eventPreview ? true : false 
+    eventPreview: eventPreview ? true : false,
+    conversationId,
+    messageCount: messages.length 
   });
 
   return (
