@@ -36,6 +36,12 @@ const ChatInterface: React.FC = () => {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Define resetEventStates BEFORE it's used anywhere else
+  const resetEventStates = () => {
+    setEventPreview(null);
+    setEventEditId(null);
+  };
+
   // Load conversation history from Supabase on component mount
   useEffect(() => {
     const fetchConversation = async () => {
@@ -590,7 +596,3 @@ const ChatInterface: React.FC = () => {
 };
 
 export default ChatInterface;
-
-function resetEventStates() {
-  throw new Error('Function not implemented.');
-}
