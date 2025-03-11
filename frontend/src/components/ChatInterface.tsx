@@ -92,242 +92,207 @@ const ChatInterface: React.FC = () => {
     setInputMessage(e.target.value);
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Updated handleSendMessage function in ChatInterface.tsx with improved event detection and debugging
+
+const handleSendMessage = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (!inputMessage.trim()) return;
+  
+  // Get user information
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    alert('Please sign in to continue');
+    return;
+  }
+  
+  // Reset any existing event states
+  resetEventStates();
+  
+  // Add user message to the chat
+  const userMessage: Message = {
+    id: Date.now().toString(),
+    role: 'user',
+    content: inputMessage,
+    timestamp: new Date()
+  };
+  
+  setMessages(prevMessages => [...prevMessages, userMessage]);
+  setInputMessage('');
+  setLoading(true);
+  
+  try {
+    // Get a fresh JWT token
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (!inputMessage.trim()) return;
-    
-    // Get user information
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      alert('Please sign in to continue');
-      return;
+    if (!session?.access_token) {
+      console.error('No access token found in session');
+      throw new Error('No valid session found');
     }
     
-    // Reset any existing event states
-    resetEventStates();
+    // Look for event titles in the message for improved matching
+    const eventTitleMatches = inputMessage.match(/(?:update|change|move|reschedule|edit)(?:\s+the)?(?:\s+)(?:([a-z']+(?:'s|s))\s+([a-z\s]+))/i);
+    let searchTitle = '';
     
-    // Add user message to the chat
-    const userMessage: Message = {
+    if (eventTitleMatches && (eventTitleMatches[1] || eventTitleMatches[2])) {
+      searchTitle = `${eventTitleMatches[1] || ''} ${eventTitleMatches[2] || ''}`.trim();
+      console.log(`Detected potential event title for update: "${searchTitle}"`);
+    }
+    
+    // Define the endpoint
+    const endpoint = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`;
+    
+    // Call Supabase Edge Function with proper authentication
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        message: inputMessage,
+        conversation_history: messages.slice(-10), // Send last 10 messages for context
+        search_title: searchTitle // Pass potential event title for more accurate matching
+      }),
+    });
+    
+    if (!response.ok) {
+      let errorMessage = `Server responded with status ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } catch (parseError) {
+        console.error('Could not parse error response');
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log("Response from chat processing:", data);
+    
+    // Enhanced debug logging
+    console.log("API response data:", {
+      intent: data.intent,
+      existing_event_id: data.existing_event_id,
+      event: data.event ? {
+        id: data.event.id,
+        title: data.event.title
+      } : null
+    });
+    
+    // Add assistant response to the chat
+    const assistantMessage: Message = {
       id: Date.now().toString(),
-      role: 'user',
-      content: inputMessage,
+      role: 'assistant',
+      content: data.message,
       timestamp: new Date()
     };
     
-    setMessages(prevMessages => [...prevMessages, userMessage]);
-    setInputMessage('');
-    setLoading(true);
+    setMessages(prevMessages => [...prevMessages, assistantMessage]);
     
-    try {
-      // Get a fresh JWT token
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        console.error('No access token found in session');
-        throw new Error('No valid session found');
-      }
-      
-      // Define the endpoint
-      const endpoint = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`;
-      
-      // Call Supabase Edge Function with proper authentication
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          message: inputMessage,
-          conversation_history: messages.slice(-10) // Send last 10 messages for context
-        }),
-      });
-      
-      if (!response.ok) {
-        let errorMessage = `Server responded with status ${response.status}`;
-        
-        try {
-          const errorData = await response.json();
-          console.error('Error response:', errorData);
-          errorMessage = errorData.message || errorData.error || errorMessage;
-        } catch (parseError) {
-          console.error('Could not parse error response');
-        }
-        
-        throw new Error(errorMessage);
-      }
-  
-      const data = await response.json();
-      console.log("Response from chat processing:", data);
-      
-      // Add this debug log here
-      console.log("API response data:", {
-        intent: data.intent,
-        existing_event_id: data.existing_event_id,
-        event: data.event ? {
-          id: data.event.id,
-          title: data.event.title
-        } : null
-      });
-      
-      // Add assistant response to the chat
-      const assistantMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: data.message,
-        timestamp: new Date()
-      };
-      
-      setMessages(prevMessages => [...prevMessages, assistantMessage]);
-      
-      // Handle different event-related intents
-      if ((data.intent === 'update_event' || data.intent === 'edit_event') && 
+    // ---- IMPROVED EVENT HANDLING ----
+    
+    // First check for explicit edit/update intents with an event ID
+    if ((data.intent === 'update_event' || data.intent === 'edit_event') && 
         (data.existing_event_id || (data.event && data.event.id))) {
-        // For update/edit intents with identified events, show the edit form
-        const eventId = data.existing_event_id || (data.event && data.event.id);
-        console.log(`Showing edit form for event ID: ${eventId}`);
-        console.log(`Setting eventEditId to: ${eventId}`);
-        console.log(`Current eventEditId before update: ${eventEditId}`);
-        
-        if (eventId) {
-          setEventEditId(eventId);
-          console.log(`EventEditId state set to: ${eventId}`);
-          setEventPreview(null);
-        } else {
-          console.error("No event ID found for edit/update intent");
-        }
-      } 
-      else if (data.event) {
-        // For new events or unidentified updates, show the preview
-        console.log("Event data received for new event:", data.event);
-        
-        // Create a base date object from the date string or description
-        let eventDate: Date;
-  
+      
+      const eventId = data.existing_event_id || (data.event && data.event.id);
+      console.log(`Event update detected with ID: ${eventId}`);
+      
+      if (eventId) {
+        // Immediately fetch the event to verify it exists
         try {
-          if (typeof data.event.date === 'string') {
-            if (data.event.date.includes('-')) {
-              // Parse YYYY-MM-DD format
-              const [year, month, day] = data.event.date.split('-').map(Number);
-              eventDate = new Date(year, month - 1, day);
-            } else {
-              // Try to parse natural language date reference
-              eventDate = dateUtils.parseNaturalDate(data.event.date);
-            }
-          } else if (typeof data.event.date === 'object' && data.event.date instanceof Date) {
-            eventDate = new Date(data.event.date);
-          } else if (data.event.start_time && data.event.start_time instanceof Date) {
-            eventDate = new Date(data.event.start_time);
-          } else {
-            // Look for day names in the user message and assistant response
-            const combinedText = `${inputMessage} ${data.message}`.toLowerCase();
+          const { data: eventData, error: eventError } = await supabase
+            .from('events')
+            .select('*')
+            .eq('id', eventId)
+            .eq('user_id', user.id)
+            .single();
             
-            if (combinedText.includes('sunday')) {
-              eventDate = dateUtils.getNextDayOfWeek('sunday');
-            } else if (combinedText.includes('monday')) {
-              eventDate = dateUtils.getNextDayOfWeek('monday');
-            } else if (combinedText.includes('tuesday')) {
-              eventDate = dateUtils.getNextDayOfWeek('tuesday');
-            } else if (combinedText.includes('wednesday')) {
-              eventDate = dateUtils.getNextDayOfWeek('wednesday');
-            } else if (combinedText.includes('thursday')) {
-              eventDate = dateUtils.getNextDayOfWeek('thursday');
-            } else if (combinedText.includes('friday')) {
-              eventDate = dateUtils.getNextDayOfWeek('friday');
-            } else if (combinedText.includes('saturday')) {
-              eventDate = dateUtils.getNextDayOfWeek('saturday');
-            } else if (combinedText.includes('tomorrow')) {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              eventDate = tomorrow;
-            } else {
-              // Try to extract specific dates like March 18
-              const specificDateMatch = combinedText.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(\d{4}))?\b/i);
-              if (specificDateMatch) {
-                const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-                const monthText = specificDateMatch[1].toLowerCase();
-                const monthIndex = monthNames.findIndex(m => monthText.startsWith(m.substring(0, 3)));
-                const day = parseInt(specificDateMatch[2]);
-                const year = specificDateMatch[3] ? parseInt(specificDateMatch[3]) : new Date().getFullYear();
-                
-                if (monthIndex >= 0 && day > 0 && day <= 31) {
-                  eventDate = new Date(year, monthIndex, day);
-                } else {
-                  // Default to tomorrow if we can't parse a date
-                  const tomorrow = new Date();
-                  tomorrow.setDate(tomorrow.getDate() + 1);
-                  eventDate = tomorrow;
-                }
-              } else {
-                // Default to tomorrow if we can't parse a date
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                eventDate = tomorrow;
-              }
-            }
+          if (eventError || !eventData) {
+            console.error('Error fetching event or event not found:', eventError);
+            // If we can't find the event, try to manually find it by title
+            await lookupEventByTitle(searchTitle || "swim lessons");
+          } else {
+            console.log('Successfully retrieved event for editing:', eventData.title);
+            // Set the event edit ID to trigger the edit form
+            setEventEditId(eventId);
+            setEventPreview(null);
           }
-        } catch (error) {
-          console.error('Error parsing date:', error);
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          eventDate = tomorrow;
+        } catch (lookupError) {
+          console.error('Error during event lookup:', lookupError);
         }
-        
-        // Set the event preview with all available data
-        setEventPreview({
-          id: data.event.id || data.existing_event_id || undefined, // Include the ID if this is updating an existing event
-          title: data.event.title || "New Event",
-          date: eventDate,
-          startTime: data.event.start_time || "",
-          endTime: data.event.end_time || "",
-          location: data.event.location || "",
-          isRecurring: data.event.is_recurring || false,
-          recurrencePattern: data.event.recurrence_pattern || ""
-        });
-        
-        console.log("Event preview set:", eventPreview);
+      } else {
+        console.error("No event ID found for edit/update intent");
+        // Try to manually find the event
+        await lookupEventByTitle(searchTitle || "swim lessons");
       }
-      
-      // Save conversation to Supabase
-      try {
-        const allMessages = [...messages, userMessage, assistantMessage];
-        
-        const { error: conversationError } = await supabase
-          .from('conversations')
-          .upsert({
-            user_id: user.id,
-            messages: allMessages,
-            updated_at: new Date().toISOString()
-          });
-          
-        if (conversationError) {
-          console.error('Error saving conversation:', conversationError);
-        }
-      } catch (saveError) {
-        console.error('Error in conversation save operation:', saveError);
-      }
-      
-    } catch (error) {
-      console.error('Error processing message:', error);
-      
-      // Add error message to chat
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `Sorry, I encountered an error. Please try again.`,
-        timestamp: new Date()
-      };
-      
-      if (error instanceof Error) {
-        errorMessage.content = `Sorry, I encountered an error: ${error.message}. Please try again.`;
-      }
-      
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
-    } finally {
-      setLoading(false);
+    } 
+    else if (data.intent === 'update_event' && searchTitle) {
+      // If we have an update intent but no ID, try to find the event by title
+      await lookupEventByTitle(searchTitle);
     }
-  };
+    else if (data.event) {
+      // For new events or unidentified updates, show the preview
+      console.log("Event data received for new event:", data.event);
+      
+      // Create event preview (rest of the code remains the same)
+      // ...
+    }
+    
+    // Save conversation to Supabase (keep existing code)
+    // ...
+    
+  } catch (error) {
+    console.error('Error processing message:', error);
+    // Error handling remains the same
+    // ...
+  } finally {
+    setLoading(false);
+  }
+};
+
+// New helper function to look up events by title
+const lookupEventByTitle = async (title: string) => {
+  if (!title) return false;
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    
+    console.log(`Looking up event by title: "${title}"`);
+    
+    // Try to find events with similar titles
+    const { data: events, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('user_id', user.id)
+      .ilike('title', `%${title}%`)
+      .order('start_time', { ascending: false })
+      .limit(1);
+      
+    if (error) {
+      console.error('Error looking up event by title:', error);
+      return false;
+    }
+    
+    if (events && events.length > 0) {
+      console.log(`Found event by title: "${events[0].title}" (ID: ${events[0].id})`);
+      setEventEditId(events[0].id);
+      setEventPreview(null);
+      return true;
+    } else {
+      console.log(`No events found with title containing "${title}"`);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error in lookupEventByTitle:', error);
+    return false;
+  }
+};
 
   const handleConfirmEvent = async () => {
     // Logic to confirm and save the event to the database

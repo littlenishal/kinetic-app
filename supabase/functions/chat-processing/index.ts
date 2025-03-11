@@ -29,11 +29,12 @@ Deno.serve(async (req) => {
     }
 
     // Parse the request body first to get the message
-    let message, conversation_history;
+    let message, conversation_history, search_title;
     try {
       const body = await req.json();
       message = body.message;
       conversation_history = body.conversation_history;
+      search_title = body.search_title; // Get potential search title from client
     } catch (error) {
       return new Response(
         JSON.stringify({ error: 'Invalid request body', details: error.message }),
@@ -148,16 +149,26 @@ Deno.serve(async (req) => {
 
     // Check if this is an update to an existing event
     const updateMatches = /update|change|move|reschedule|edit|modify|postpone|shift/i.test(message);
+    
+    // Check for specific event mention patterns
     const eventNameMatches = message.match(/(?:update|change|move|reschedule|edit|modify)(?:\s+the)?(?:\s+event)?(?:\s+for)?\s+["']?([^"']+?)["']?\s+(?:to|from|at|on)/i);
     
-    // Also look for possessive forms like "Maya's swim lessons"
+    // Look for possessive forms like "Maya's swim lessons"
     const possessiveMatch = message.match(/(?:update|change|move|reschedule|edit|modify)(?:\s+the)?(?:\s+)(?:([a-z']+(?:'s))\s+([a-z\s]+))/i);
+    
+    // Look for direct mentions like "swim lessons"
+    const directMatch = message.match(/(?:update|change|move|reschedule|edit|modify)\s+(?:the\s+)?([a-z\s]+)/i);
     
     let eventTitle = null;
     if (eventNameMatches) {
       eventTitle = eventNameMatches[1].trim();
     } else if (possessiveMatch) {
       eventTitle = `${possessiveMatch[1]} ${possessiveMatch[2]}`.trim();
+    } else if (directMatch) {
+      eventTitle = directMatch[1].trim();
+    } else if (search_title) {
+      // Use the search title provided by the client if available
+      eventTitle = search_title;
     }
 
     // Special case: User explicitly says they need to update an event without details
@@ -169,24 +180,7 @@ Deno.serve(async (req) => {
         intent = 'update_event';
         
         console.log(`Detected update intent for: "${searchTitle}"`);
-        
-        try {
-          // Search for the mentioned event
-          const queryResult = await supabase
-            .from('events')
-            .select('*')
-            .eq('user_id', user.id)
-            .ilike('title', `%${searchTitle}%`)
-            .order('start_time', { ascending: false })
-            .limit(1);
-            
-          if (!queryResult.error && queryResult.data && queryResult.data.length > 0) {
-            existingEventId = queryResult.data[0].id;
-            console.log(`Found existing event with ID ${existingEventId}`);
-          }
-        } catch (error) {
-          console.error('Error searching for events:', error);
-        }
+        eventTitle = searchTitle;
       }
     }
     
@@ -197,38 +191,20 @@ Deno.serve(async (req) => {
       if (editCommandMatch) {
         const searchTitle = editCommandMatch[1].trim();
         intent = 'edit_event'; // Use a specific intent for explicit edit requests
+        eventTitle = searchTitle;
         
         console.log(`Detected direct edit command for: "${searchTitle}"`);
-        
-        try {
-          // Search for the mentioned event
-          const queryResult = await supabase
-            .from('events')
-            .select('*')
-            .eq('user_id', user.id)
-            .ilike('title', `%${searchTitle}%`)
-            .order('start_time', { ascending: false })
-            .limit(1);
-            
-          if (!queryResult.error && queryResult.data && queryResult.data.length > 0) {
-            existingEventId = queryResult.data[0].id;
-            console.log(`Found existing event with ID ${existingEventId} for direct edit command`);
-          }
-        } catch (error) {
-          console.error('Error searching for events:', error);
-        }
       }
     }
 
     // If message appears to be about updating an event
     if (updateMatches && eventTitle) {
       intent = 'update_event';
+      console.log(`Detected update intent for event: "${eventTitle}"`);
       
-      // Look for existing events with matching title
+      // Look for existing events with matching title using multiple approaches
       try {
-        console.log(`Searching for events matching title: "${eventTitle}"`);
-        
-        // First try an exact match
+        // First try exact match
         let queryResult = await supabase
           .from('events')
           .select('*')
@@ -237,7 +213,18 @@ Deno.serve(async (req) => {
           .order('start_time', { ascending: false })
           .limit(1);
           
-        // If no exact match, try a case-insensitive partial match
+        // If no exact match, try case-insensitive exact match
+        if (queryResult.error || queryResult.data.length === 0) {
+          queryResult = await supabase
+            .from('events')
+            .select('*')
+            .eq('user_id', user.id)
+            .ilike('title', eventTitle)
+            .order('start_time', { ascending: false })
+            .limit(1);
+        }
+        
+        // If still no match, try partial match
         if (queryResult.error || queryResult.data.length === 0) {
           queryResult = await supabase
             .from('events')
@@ -248,9 +235,52 @@ Deno.serve(async (req) => {
             .limit(1);
         }
         
+        // Additional search for specific keywords that might be in the title
+        if (queryResult.error || queryResult.data.length === 0) {
+          // Try to extract key words from the event title
+          const keyWords = eventTitle.split(/\s+/).filter(word => word.length > 3);
+          
+          if (keyWords.length > 0) {
+            // Try each keyword
+            for (const keyword of keyWords) {
+              queryResult = await supabase
+                .from('events')
+                .select('*')
+                .eq('user_id', user.id)
+                .ilike('title', `%${keyword}%`)
+                .order('start_time', { ascending: false })
+                .limit(1);
+                
+              if (!queryResult.error && queryResult.data && queryResult.data.length > 0) {
+                break; // Stop if we found a match
+              }
+            }
+          }
+        }
+        
+        // Check for "lessons" specifically if we're still not finding anything
+        if ((queryResult.error || queryResult.data.length === 0) && 
+            (message.toLowerCase().includes('lesson') || message.toLowerCase().includes('class'))) {
+          queryResult = await supabase
+            .from('events')
+            .select('*')
+            .eq('user_id', user.id)
+            .ilike('title', '%lesson%')
+            .order('start_time', { ascending: false })
+            .limit(1);
+        }
+        
         if (!queryResult.error && queryResult.data && queryResult.data.length > 0) {
           existingEventId = queryResult.data[0].id;
-          console.log(`Found existing event with ID ${existingEventId}`);
+          console.log(`Found existing event with ID ${existingEventId} and title "${queryResult.data[0].title}"`);
+          
+          // If there's a partial match but not our exact title, also create an event object
+          // to send back with the corrected title
+          event = {
+            id: existingEventId,
+            title: queryResult.data[0].title,
+            // We'll let the client fill in the rest of the details from the database
+          };
         } else {
           console.log('No matching events found');
         }
