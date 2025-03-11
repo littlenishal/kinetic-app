@@ -79,25 +79,31 @@ const EventEditForm: React.FC<EventEditFormProps> = ({
       return;
     }
     
-    // Create date objects
-    const dateObj = new Date(date);
+    // Fix date/time construction to avoid timezone issues
+    // Parse the date components
+    const [year, month, day] = date.split('-').map(Number);
     
     // Parse start time
     const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const startDateTime = new Date(dateObj);
+    
+    // Create a new date object using local components
+    // This avoids timezone conversion issues
+    const startDateTime = new Date();
+    startDateTime.setFullYear(year, month - 1, day); // month is 0-indexed in JS
     startDateTime.setHours(startHours, startMinutes, 0, 0);
     
     // Parse end time if available
     let endDateTime = null;
     if (endTime) {
       const [endHours, endMinutes] = endTime.split(':').map(Number);
-      endDateTime = new Date(dateObj);
+      endDateTime = new Date();
+      endDateTime.setFullYear(year, month - 1, day);
       endDateTime.setHours(endHours, endMinutes, 0, 0);
     }
     
     // Log times for debugging
     console.log('Form data:');
-    console.log('- Date:', date);
+    console.log('- Date components:', year, month, day);
     console.log('- Start time:', startTime, '→', startDateTime.toISOString());
     if (endTime) {
       console.log('- End time:', endTime, '→', endDateTime?.toISOString());
