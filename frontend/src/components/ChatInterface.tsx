@@ -483,8 +483,21 @@ const ChatInterface: React.FC = () => {
         timestamp: new Date()
       };
       
-      setMessages(prevMessages => [...prevMessages, confirmationMessage]);
+      // Update local state
+      const updatedMessages = [...messages, confirmationMessage];
+      setMessages(updatedMessages);
       setEventPreview(null);
+      
+      // Save the updated conversation to Supabase
+      await supabase
+        .from('conversations')
+        .upsert({
+          user_id: user.id,
+          messages: updatedMessages,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
       
     } catch (error) {
       console.error('Error saving event:', error);
@@ -497,7 +510,24 @@ const ChatInterface: React.FC = () => {
         timestamp: new Date()
       };
       
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
+      // Update local state
+      const updatedMessages = [...messages, errorMessage];
+      setMessages(updatedMessages);
+      
+      // Even on error, save the conversation with the error message
+      try {
+        await supabase
+          .from('conversations')
+          .upsert({
+            user_id: user.id,
+            messages: updatedMessages,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id'
+          });
+      } catch (saveError) {
+        console.error('Failed to save conversation after event error:', saveError);
+      }
     }
   };
 
@@ -536,7 +566,20 @@ const ChatInterface: React.FC = () => {
         timestamp: new Date()
       };
       
-      setMessages(prevMessages => [...prevMessages, confirmationMessage]);
+      // Update local state with the new message
+      const updatedMessages = [...messages, confirmationMessage];
+      setMessages(updatedMessages);
+      
+      // Save the updated conversation to Supabase
+      await supabase
+        .from('conversations')
+        .upsert({
+          user_id: user.id,
+          messages: updatedMessages,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
+        });
       
       // Clear the edit state
       setEventEditId(null);
@@ -552,7 +595,24 @@ const ChatInterface: React.FC = () => {
         timestamp: new Date()
       };
       
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
+      // Update local state
+      const updatedMessages = [...messages, errorMessage];
+      setMessages(updatedMessages);
+      
+      // Even on error, save the conversation with the error message
+      try {
+        await supabase
+          .from('conversations')
+          .upsert({
+            user_id: user.id,
+            messages: updatedMessages,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id'
+          });
+      } catch (saveError) {
+        console.error('Failed to save conversation after event update error:', saveError);
+      }
     }
   };
 
