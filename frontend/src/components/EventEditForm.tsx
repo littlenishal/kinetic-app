@@ -95,18 +95,32 @@ const EventEditForm: React.FC<EventEditFormProps> = ({
       endDateTime.setHours(endHours, endMinutes, 0, 0);
     }
     
+    // Log times for debugging
+    console.log('Form data:');
+    console.log('- Date:', date);
+    console.log('- Start time:', startTime, '→', startDateTime.toISOString());
+    if (endTime) {
+      console.log('- End time:', endTime, '→', endDateTime?.toISOString());
+    }
+    
     // Create updated event object
     const updatedEvent = {
-      ...event,
+      ...event, // Keep original event properties
       title,
       start_time: startDateTime.toISOString(),
       end_time: endDateTime ? endDateTime.toISOString() : null,
       location: location || null,
       description: description || null,
       is_recurring: isRecurring,
-      // Keep the existing recurrence_pattern
+      // Keep the existing recurrence_pattern but ensure it's not undefined
+      recurrence_pattern: event.recurrence_pattern || null,
+      // Ensure id is preserved
+      id: event.id
     };
     
+    console.log('Submitting updated event:', updatedEvent);
+    
+    // Pass the updated event to the parent component
     onSave(updatedEvent);
   };
   

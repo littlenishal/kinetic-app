@@ -51,14 +51,24 @@ const CalendarPage: React.FC = () => {
   
   // After event edit, update state and refresh the calendar
   const handleEventEdited = (updatedEvent: CalendarEvent) => {
+    console.log('Event edited in CalendarPage:', updatedEvent);
+    
+    // Set the confirmation message
     setLastAction({
       type: 'updated',
       eventTitle: updatedEvent.title
     });
     
+    // Close the modal
     setSelectedEvent(null);
+    
     // Trigger a refresh of the calendar by changing the key
-    setRefreshKey(prev => prev + 1);
+    // This forces the WeeklyCalendar to remount and refetch data
+    setRefreshKey(prevKey => {
+      const newKey = prevKey + 1;
+      console.log(`Incrementing refresh key: ${prevKey} → ${newKey}`);
+      return newKey;
+    });
   };
   
   return (

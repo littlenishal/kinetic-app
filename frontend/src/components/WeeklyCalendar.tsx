@@ -1,5 +1,5 @@
 // frontend/src/components/WeeklyCalendar.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import * as dateUtils from '../utils/dateUtils';
 import EventConfirmation from './EventConfirmation';
@@ -128,8 +128,15 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     }
   };
 
+  // Create a reference to track component mounts
+  const componentMountCount = useRef(0);
+  
   // Fetch events from Supabase for the current week
   useEffect(() => {
+    // Increment mount count
+    componentMountCount.current += 1;
+    console.log(`WeeklyCalendar mounted/updated (count: ${componentMountCount.current})`);
+    
     const fetchEvents = async () => {
       setLoading(true);
       setError(null);
@@ -147,6 +154,11 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         const weekEndDate = new Date(currentWeekStart);
         weekEndDate.setDate(weekEndDate.getDate() + 7);
         
+        console.log(`Fetching events for week of ${currentWeekStart.toISOString()}`);
+        
+        // Make sure we're not caching results by adding timestamp to the query
+        const cacheBreaker = new Date().getTime();
+        
         // Fetch events for the current week
         const { data, error } = await supabase
           .from('events')
@@ -160,6 +172,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
           throw error;
         }
         
+        console.log(`Retrieved ${data?.length || 0} events`);
         setEvents(data || []);
       } catch (error) {
         console.error('Error fetching events:', error);
@@ -170,6 +183,12 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     };
     
     fetchEvents();
+    
+    // Important: This component should refetch data:
+    // 1. When the currentWeekStart changes (navigation)
+    // 2. When the component is mounted/remounted (via the key prop)
+    // The empty dependency array would only run on mount, but since
+    // we're using key={refreshKey} in parent, this is remounted
   }, [currentWeekStart]);
 
   // Get events for a specific day

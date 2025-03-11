@@ -66,25 +66,44 @@ const EventDetails: React.FC<EventDetailsProps> = ({
   
   const handleSaveEdit = async (updatedEvent: any) => {
     try {
-      const { error } = await supabase
+      // Get current user for RLS
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      // Include all necessary fields for update
+      const updateData = {
+        user_id: user.id, // Include user_id for RLS
+        title: updatedEvent.title,
+        start_time: updatedEvent.start_time,
+        end_time: updatedEvent.end_time,
+        location: updatedEvent.location,
+        description: updatedEvent.description,
+        is_recurring: updatedEvent.is_recurring,
+        recurrence_pattern: updatedEvent.recurrence_pattern,
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log('Updating event with data:', updateData);
+      
+      const { data, error } = await supabase
         .from('events')
-        .update({
-          title: updatedEvent.title,
-          start_time: updatedEvent.start_time,
-          end_time: updatedEvent.end_time,
-          location: updatedEvent.location,
-          description: updatedEvent.description,
-          is_recurring: updatedEvent.is_recurring,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', event.id);
+        .update(updateData)
+        .eq('id', event.id)
+        .select('*')
+        .single();
       
       if (error) throw error;
       
-      if (onEdit) {
-        onEdit(updatedEvent);
+      console.log('Event updated successfully:', data);
+      
+      // Use the actual returned data from Supabase for the callback
+      if (onEdit && data) {
+        onEdit(data);
       } else {
-        onClose(); // Fall back to closing if no onEdit handler
+        onClose(); // Fall back to closing if no onEdit handler or no data
       }
     } catch (error) {
       console.error('Error updating event:', error);
