@@ -36,6 +36,124 @@ interface Conversation {
   updated_at?: string;
 }
 
+// Detect edit requests
+const EDIT_COMMAND_PATTERNS = [
+  /\b(?:edit|modify|update|change)\s+(?:my|the)?\s+([a-z0-9\s'-]+?)(?:\s+event)?\s*$/i,
+  /\bopen\s+(?:the)?\s+(?:editor|form|edit(?:\s+form)?)\s+for\s+([a-z0-9\s'-]+)(?:\s+event)?\s*$/i,
+  /\bmake\s+changes\s+to\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\s*$/i,
+  /\blet\s+me\s+edit\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\s*$/i
+];
+
+// Find event by title
+const findEventByTitle = async (searchTitle: string): Promise<string | null> => {
+  if (!searchTitle || searchTitle.trim().length < 3) {
+    console.log("Search title too short or empty");
+    return null;
+  }
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log("No authenticated user found");
+      return null;
+    }
+    
+    console.log(`Finding event with title similar to: "${searchTitle}"`);
+    
+    // Try exact match first (case-insensitive)
+    let { data: events, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('user_id', user.id)
+      .ilike('title', searchTitle)
+      .order('start_time', { ascending: false })
+      .limit(1);
+      
+    if (error) {
+      console.error('Error in exact match lookup:', error);
+      return null;
+    }
+    
+    // If no exact match, try partial match
+    if (!events || events.length === 0) {
+      const { data: partialEvents, error: partialError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('user_id', user.id)
+        .ilike('title', `%${searchTitle}%`)
+        .order('start_time', { ascending: false })
+        .limit(1);
+        
+      if (partialError) {
+        console.error('Error in partial match lookup:', partialError);
+        return null;
+      }
+      
+      events = partialEvents;
+    }
+    
+    // If still no match, try with words
+    if (!events || events.length === 0) {
+      // Try matching individual words (for longer titles)
+      const words = searchTitle.split(/\s+/).filter(word => word.length > 3);
+      
+      for (const word of words) {
+        const { data: wordEvents, error: wordError } = await supabase
+          .from('events')
+          .select('*')
+          .eq('user_id', user.id)
+          .ilike('title', `%${word}%`)
+          .order('start_time', { ascending: false })
+          .limit(5);
+          
+        if (wordError) {
+          console.error(`Error in word match lookup for "${word}":`, wordError);
+          continue;
+        }
+        
+        if (wordEvents && wordEvents.length > 0) {
+          events = wordEvents;
+          break;
+        }
+      }
+    }
+    
+    if (events && events.length > 0) {
+      console.log(`Found event: "${events[0].title}" (ID: ${events[0].id})`);
+      return events[0].id;
+    }
+    
+    console.log(`No events found matching "${searchTitle}"`);
+    return null;
+    
+  } catch (error) {
+    console.error('Error in findEventByTitle:', error);
+    return null;
+  }
+};
+
+// Check for edit requests provided directly by user
+const checkForEditRequest = async (message: string): Promise<string | null> => {
+  console.log("Checking for edit request in:", message);
+  
+  // Try each pattern to extract event title
+  for (const pattern of EDIT_COMMAND_PATTERNS) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      const eventTitle = match[1].trim();
+      console.log(`Detected edit request for: "${eventTitle}"`);
+      
+      // Try to find the event in the database
+      const eventId = await findEventByTitle(eventTitle);
+      if (eventId) {
+        return eventId;
+      }
+    }
+  }
+  
+  return null;
+};
+
 const ChatInterface: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -135,6 +253,12 @@ const ChatInterface: React.FC = () => {
     fetchConversation();
   }, []);
 
+  useEffect(() => {
+    if (eventEditId) {
+      console.log(`EventEditId state set to: ${eventEditId}`);
+    }
+  }, [eventEditId]);
+  
   // Auto-scroll to bottom of message list when messages change
   useEffect(() => {
     scrollToBottom();
@@ -250,6 +374,16 @@ const ChatInterface: React.FC = () => {
     // Save conversation with user message before API call
     await saveConversation(updatedMessages);
     
+    // Check for direct edit request in user input
+    const eventIdToEdit = await checkForEditRequest(inputMessage);
+    if (eventIdToEdit) {
+      console.log(`Direct edit request detected, opening edit form for event ID: ${eventIdToEdit}`);
+      setEventEditId(eventIdToEdit);
+      setEventPreview(null);
+      setLoading(false);
+      return; // Skip the rest of the function to avoid unnecessary API calls
+    }
+
     try {
       // Get a fresh JWT token
       const { data: { session } } = await supabase.auth.getSession();
@@ -260,10 +394,10 @@ const ChatInterface: React.FC = () => {
       }
       
       // Look for event titles in the message for improved matching
-      const eventTitleMatches = inputMessage.match(/(?:update|change|move|reschedule|edit)(?:\s+the)?(?:\s+)(?:([a-z']+(?:'s|s))\s+([a-z\s]+))/i);
       let searchTitle = '';
+      const eventTitleMatches = inputMessage.match(/(?:update|change|move|reschedule|edit)(?:\s+the)?(?:\s+)(?:([a-z']+(?:'s|s))\s+([a-z\s]+))/i);
       
-      if (eventTitleMatches && (eventTitleMatches[1] || eventTitleMatches[2])) {
+      if (eventTitleMatches && (eventTitleMatches[1] || eventTitleMatches[2])) {        
         searchTitle = `${eventTitleMatches[1] || ''} ${eventTitleMatches[2] || ''}`.trim();
         console.log(`Detected potential event title for update: "${searchTitle}"`);
       }
@@ -329,39 +463,45 @@ const ChatInterface: React.FC = () => {
       // ---- IMPROVED EVENT HANDLING ----
       
       // First check for explicit edit/update intents with an event ID
-      if ((data.intent === 'update_event' || data.intent === 'edit_event') && 
-          (data.existing_event_id || (data.event && data.event.id))) {
-        
-        const eventId = data.existing_event_id || (data.event && data.event.id);
-        console.log(`Event update detected with ID: ${eventId}`);
+      // In the API response handling section, improve the event ID extraction:
+      if ((data.intent === 'update_event' || data.intent === 'edit_event')) {
+        // First check if we have an explicit event ID from the API
+        let eventId = data.existing_event_id || (data.event && data.event.id);
         
         if (eventId) {
-          // Immediately fetch the event to verify it exists
-          try {
-            const { data: eventData, error: eventError } = await supabase
-              .from('events')
-              .select('*')
-              .eq('id', eventId)
-              .eq('user_id', user.id)
-              .single();
-              
-            if (eventError || !eventData) {
-              console.error('Error fetching event or event not found:', eventError);
-              // If we can't find the event, try to manually find it by title
-              await lookupEventByTitle(searchTitle || "swim lessons");
-            } else {
-              console.log('Successfully retrieved event for editing:', eventData.title);
-              // Set the event edit ID to trigger the edit form
-              setEventEditId(eventId);
+          console.log(`API returned event ID for editing: ${eventId}`);
+          setEventEditId(eventId);
+          setEventPreview(null);
+        } 
+        // If no event ID but we have a title, try to find it
+        else if (data.event && data.event.title) {
+          console.log(`Looking up event by title from API: "${data.event.title}"`);
+          const foundEventId = await findEventByTitle(data.event.title);
+          if (foundEventId) {
+            setEventEditId(foundEventId);
+            setEventPreview(null);
+          } else {
+            console.log(`Could not find event with title: "${data.event.title}"`);
+            // Fall back to event preview if we have event data
+            if (data.event) {
+              console.log("Falling back to event preview with:", data.event);
+              // Set up event preview...
+            }
+          }
+        } 
+        // Last resort: look through the message for clues
+        else {
+          searchTitle = searchTitle || 
+            inputMessage.match(/(?:edit|update|modify)\s+(?:my|the)?\s+([a-z0-9\s'-]+)/i)?.[1] || '';
+            
+          if (searchTitle) {
+            console.log(`Looking up event by extracted title: "${searchTitle}"`);
+            const foundEventId = await findEventByTitle(searchTitle);
+            if (foundEventId) {
+              setEventEditId(foundEventId);
               setEventPreview(null);
             }
-          } catch (lookupError) {
-            console.error('Error during event lookup:', lookupError);
           }
-        } else {
-          console.error("No event ID found for edit/update intent");
-          // Try to manually find the event
-          await lookupEventByTitle(searchTitle || "swim lessons");
         }
       } 
       else if (data.intent === 'update_event' && searchTitle) {

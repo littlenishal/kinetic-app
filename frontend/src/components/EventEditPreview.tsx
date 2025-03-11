@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import * as dateUtils from '../utils/dateUtils';
 import { supabase } from '../services/supabaseClient';
+import '../styles/EventEditPreview.css';
 
 interface EventEditPreviewProps {
   eventId: string;
@@ -14,6 +15,8 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
   onSave,
   onCancel
 }) => {
+  console.log(`EventEditPreview mounted with eventId: ${eventId}`);
+  
   const [loading, setLoading] = useState(true);
   const [event, setEvent] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +31,13 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
   // Fetch the event details
   useEffect(() => {
     const fetchEvent = async () => {
+      if (!eventId) {
+        setError('No event ID provided');
+        setLoading(false);
+        return;
+      }
+      
+      console.log(`Fetching event details for ID: ${eventId}`);
       setLoading(true);
       setError(null);
       
@@ -44,8 +54,17 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
           .eq('user_id', user.id)
           .single();
         
-        if (error) throw error;
-        if (!data) throw new Error('Event not found');
+        if (error) {
+          console.error('Error fetching event:', error);
+          throw error;
+        }
+        
+        if (!data) {
+          console.error('Event not found');
+          throw new Error('Event not found');
+        }
+        
+        console.log('Successfully retrieved event:', data);
         
         // Store the full event data
         setEvent(data);
@@ -63,7 +82,7 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
         setLocation(data.location || '');
         
       } catch (err) {
-        console.error('Error fetching event:', err);
+        console.error('Error in fetchEvent:', err);
         setError(err instanceof Error ? err.message : 'Failed to load event details');
       } finally {
         setLoading(false);
@@ -96,6 +115,13 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
         endDateTime.setFullYear(year, month - 1, day);
         endDateTime.setHours(endHours, endMinutes, 0, 0);
       }
+      
+      console.log('Saving updated event with data:', {
+        title,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime ? endDateTime.toISOString() : null,
+        location
+      });
       
       // Create updated event object
       const updatedEvent = {
