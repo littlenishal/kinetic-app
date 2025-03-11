@@ -1,0 +1,147 @@
+/* frontend/src/styles/EventEditPreview.css */
+
+.event-edit-preview {
+    align-self: center;
+    background-color: white;
+    border-radius: 10px;
+    padding: 20px;
+    margin: 12px 0;
+    width: 90%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #f59e0b;
+    animation: slideIn 0.3s ease-out;
+  }
+  
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .event-edit-preview h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #f59e0b;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  
+  .event-edit-preview .form-group {
+    margin-bottom: 14px;
+  }
+  
+  .event-edit-preview label {
+    display: block;
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 4px;
+  }
+  
+  .event-edit-preview input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 15px;
+  }
+  
+  .event-edit-preview input:focus {
+    outline: none;
+    border-color: #0084ff;
+    box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.1);
+  }
+  
+  .event-edit-preview .form-row {
+    display: flex;
+    gap: 12px;
+  }
+  
+  .event-edit-preview .form-row .form-group {
+    flex: 1;
+  }
+  
+  .event-edit-preview .date-display {
+    font-size: 13px;
+    color: #666;
+    margin-top: 4px;
+  }
+  
+  .event-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+  
+  .event-edit-preview .save-button {
+    background-color: #f59e0b;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+  
+  .event-edit-preview .save-button:hover {
+    background-color: #d97706;
+  }
+  
+  .event-edit-preview .cancel-button {
+    background-color: #f0f2f5;
+    color: #65676b;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .event-edit-preview .cancel-button:hover {
+    background-color: #e4e6eb;
+  }
+  
+  .event-edit-preview.loading,
+  .event-edit-preview.error {
+    text-align: center;
+    padding: 30px 20px;
+  }
+  
+  .event-edit-preview .loading-spinner {
+    margin: 0 auto 16px;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #f59e0b;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .event-edit-preview .error-message {
+    color: #e53935;
+    margin-bottom: 16px;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 480px) {
+    .event-edit-preview {
+      width: 95%;
+      padding: 16px;
+    }
+  
+    .event-edit-preview .form-row {
+      flex-direction: column;
+      gap: 14px;
+    }
+  }

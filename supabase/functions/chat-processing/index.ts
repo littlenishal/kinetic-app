@@ -149,7 +149,46 @@ Deno.serve(async (req) => {
     // Check if this is an update to an existing event
     const updateMatches = /update|change|move|reschedule|edit|modify|postpone|shift/i.test(message);
     const eventNameMatches = message.match(/(?:update|change|move|reschedule|edit|modify)(?:\s+the)?(?:\s+event)?(?:\s+for)?\s+["']?([^"']+?)["']?\s+(?:to|from|at|on)/i);
-    const eventTitle = eventNameMatches ? eventNameMatches[1].trim() : null;
+    
+    // Also look for possessive forms like "Maya's swim lessons"
+    const possessiveMatch = message.match(/(?:update|change|move|reschedule|edit|modify)(?:\s+the)?(?:\s+)(?:([a-z']+(?:'s))\s+([a-z\s]+))/i);
+    
+    let eventTitle = null;
+    if (eventNameMatches) {
+      eventTitle = eventNameMatches[1].trim();
+    } else if (possessiveMatch) {
+      eventTitle = `${possessiveMatch[1]} ${possessiveMatch[2]}`.trim();
+    }
+
+    // Special case: User explicitly says they need to update an event without details
+    if (/\bneed\s+to\s+update\b/i.test(message) || /\bupdate\s+[a-z]+['']s\b/i.test(message)) {
+      const specificEventMatch = message.match(/\b(?:need\s+to\s+update|update)\s+([a-z]+(?:'s)?\s+[a-z]+(?:\s+[a-z]+)*)\b/i);
+      
+      if (specificEventMatch) {
+        const searchTitle = specificEventMatch[1].trim();
+        intent = 'update_event';
+        
+        console.log(`Detected update intent for: "${searchTitle}"`);
+        
+        try {
+          // Search for the mentioned event
+          const queryResult = await supabase
+            .from('events')
+            .select('*')
+            .eq('user_id', user.id)
+            .ilike('title', `%${searchTitle}%`)
+            .order('start_time', { ascending: false })
+            .limit(1);
+            
+          if (!queryResult.error && queryResult.data && queryResult.data.length > 0) {
+            existingEventId = queryResult.data[0].id;
+            console.log(`Found existing event with ID ${existingEventId}`);
+          }
+        } catch (error) {
+          console.error('Error searching for events:', error);
+        }
+      }
+    }
 
     // If message appears to be about updating an event
     if (updateMatches && eventTitle) {
@@ -157,17 +196,33 @@ Deno.serve(async (req) => {
       
       // Look for existing events with matching title
       try {
-        const { data: existingEvents, error } = await supabase
+        console.log(`Searching for events matching title: "${eventTitle}"`);
+        
+        // First try an exact match
+        let queryResult = await supabase
           .from('events')
           .select('*')
           .eq('user_id', user.id)
-          .ilike('title', `%${eventTitle}%`)
+          .eq('title', eventTitle)
           .order('start_time', { ascending: false })
           .limit(1);
+          
+        // If no exact match, try a case-insensitive partial match
+        if (queryResult.error || queryResult.data.length === 0) {
+          queryResult = await supabase
+            .from('events')
+            .select('*')
+            .eq('user_id', user.id)
+            .ilike('title', `%${eventTitle}%`)
+            .order('start_time', { ascending: false })
+            .limit(1);
+        }
         
-        if (!error && existingEvents && existingEvents.length > 0) {
-          existingEventId = existingEvents[0].id;
+        if (!queryResult.error && queryResult.data && queryResult.data.length > 0) {
+          existingEventId = queryResult.data[0].id;
           console.log(`Found existing event with ID ${existingEventId}`);
+        } else {
+          console.log('No matching events found');
         }
       } catch (error) {
         console.error('Error searching for existing events:', error);
