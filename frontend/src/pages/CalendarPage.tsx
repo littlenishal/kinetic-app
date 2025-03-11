@@ -15,9 +15,15 @@ interface CalendarEvent {
   recurrence_pattern?: any;
 }
 
+interface EventConfirmation {
+  type: 'created' | 'updated' | 'deleted';
+  eventTitle: string;
+}
+
 const CalendarPage: React.FC = () => {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [lastAction, setLastAction] = useState<EventConfirmation | null>(null);
   
   // Handle event selection
   const handleEventSelect = (event: CalendarEvent) => {
@@ -31,18 +37,28 @@ const CalendarPage: React.FC = () => {
   
   // After event deletion, close modal and refresh the calendar
   const handleEventDeleted = () => {
+    const eventTitle = selectedEvent?.title || 'Event';
+    
+    setLastAction({
+      type: 'deleted',
+      eventTitle: eventTitle
+    });
+    
     setSelectedEvent(null);
     // Trigger a refresh of the calendar by changing the key
     setRefreshKey(prev => prev + 1);
   };
   
-  // Switch to chat view to edit the event
-  const handleEditEvent = () => {
-    // For now, just close the modal
-    // In a future implementation, this could redirect to the chat interface
-    // with a pre-filled message to edit the event
+  // After event edit, update state and refresh the calendar
+  const handleEventEdited = (updatedEvent: CalendarEvent) => {
+    setLastAction({
+      type: 'updated',
+      eventTitle: updatedEvent.title
+    });
+    
     setSelectedEvent(null);
-    // You could also use a context or state management to communicate with the chat component
+    // Trigger a refresh of the calendar by changing the key
+    setRefreshKey(prev => prev + 1);
   };
   
   return (
@@ -50,14 +66,15 @@ const CalendarPage: React.FC = () => {
       <div className="calendar-page-header">
         <h1>Calendar</h1>
         <p className="calendar-intro">
-          View and manage your family events. To add or edit events, use the chat interface.
+          View and manage your family events. You can add events through the chat or edit them directly here.
         </p>
       </div>
       
-      {/* Weekly calendar with refresh key */}
+      {/* Weekly calendar with refresh key and last action for confirmation */}
       <WeeklyCalendar 
         key={refreshKey}
-        onEventSelect={handleEventSelect} 
+        onEventSelect={handleEventSelect}
+        initialConfirmation={lastAction || undefined}
       />
       
       {/* Event details modal */}
@@ -66,7 +83,7 @@ const CalendarPage: React.FC = () => {
           event={selectedEvent} 
           onClose={handleCloseDetails}
           onDelete={handleEventDeleted}
-          onEdit={handleEditEvent}
+          onEdit={handleEventEdited}
         />
       )}
     </div>
