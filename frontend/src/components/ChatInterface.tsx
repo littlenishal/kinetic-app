@@ -2,8 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import EventPreview from './EventPreview';
+import EventEditPreview from './EventEditPreview';
 import * as dateUtils from '../utils/dateUtils';
 import '../styles/ChatInterface.css';
+import '../styles/EventEditPreview.css';
 
 // Message type definition
 interface Message {
@@ -30,6 +32,7 @@ const ChatInterface: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [eventPreview, setEventPreview] = useState<EventPreviewData | null>(null);
+  const [eventEditId, setEventEditId] = useState<string | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +98,9 @@ const ChatInterface: React.FC = () => {
       return;
     }
     
+    // Reset any existing event states
+    resetEventStates();
+    
     // Add user message to the chat
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -159,9 +165,17 @@ const ChatInterface: React.FC = () => {
       
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
       
-      // If the response includes an event preview, show it
-      if (data.event) {
-        console.log("Event data received:", data.event);
+      // Handle different event-related intents
+      if (data.intent === 'update_event' && (data.existing_event_id || (data.event && data.event.id))) {
+        // For update intents with identified events, show the edit form
+        const eventId = data.existing_event_id || data.event.id;
+        console.log(`Showing edit form for event ID: ${eventId}`);
+        setEventEditId(eventId);
+        setEventPreview(null);
+      } 
+      else if (data.event) {
+        // For new events or unidentified updates, show the preview
+        console.log("Event data received for new event:", data.event);
         
         // Create a base date object from the date string or description
         let eventDate: Date;
@@ -445,6 +459,57 @@ const ChatInterface: React.FC = () => {
 
   const handleCancelEvent = () => {
     setEventPreview(null);
+    setEventEditId(null);
+  };
+  
+  const handleEventEditSave = async (updatedEvent: any) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      // Save the updated event to the database
+      const { error } = await supabase
+        .from('events')
+        .update({
+          title: updatedEvent.title,
+          start_time: updatedEvent.start_time,
+          end_time: updatedEvent.end_time,
+          location: updatedEvent.location,
+          is_recurring: updatedEvent.is_recurring || false,
+          recurrence_pattern: updatedEvent.recurrence_pattern,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', updatedEvent.id)
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      
+      // Add confirmation message
+      const confirmationMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `Event "${updatedEvent.title}" has been updated in your calendar.`,
+        timestamp: new Date()
+      };
+      
+      setMessages(prevMessages => [...prevMessages, confirmationMessage]);
+      
+      // Clear the edit state
+      setEventEditId(null);
+      
+    } catch (error) {
+      console.error('Error updating event:', error);
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Sorry, I couldn\'t update your event. Please try again.',
+        timestamp: new Date()
+      };
+      
+      setMessages(prevMessages => [...prevMessages, errorMessage]);
+    }
   };
 
   // Render message bubbles based on role
@@ -471,11 +536,20 @@ const ChatInterface: React.FC = () => {
       <div className="messages-container">
         {messages.map(renderMessage)}
         
-        {/* Event preview card */}
+        {/* Event preview card for new events */}
         {eventPreview && (
           <EventPreview 
             event={eventPreview}
             onConfirm={handleConfirmEvent}
+            onCancel={handleCancelEvent}
+          />
+        )}
+        
+        {/* Event edit form for updating existing events */}
+        {eventEditId && (
+          <EventEditPreview
+            eventId={eventEditId}
+            onSave={handleEventEditSave}
             onCancel={handleCancelEvent}
           />
         )}
@@ -516,3 +590,7 @@ const ChatInterface: React.FC = () => {
 };
 
 export default ChatInterface;
+
+function resetEventStates() {
+  throw new Error('Function not implemented.');
+}
