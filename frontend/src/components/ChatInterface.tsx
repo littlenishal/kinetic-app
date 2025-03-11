@@ -1,3 +1,4 @@
+// frontend/src/components/ChatInterface.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import EventPreview from './EventPreview';
@@ -14,6 +15,7 @@ interface Message {
 
 // Optional event preview component that appears when events are detected
 interface EventPreviewData {
+  id?: string; // Optional ID for existing events
   title: string;
   date: Date;
   startTime?: string;
@@ -201,10 +203,29 @@ const ChatInterface: React.FC = () => {
               tomorrow.setDate(tomorrow.getDate() + 1);
               eventDate = tomorrow;
             } else {
-              // Default to tomorrow if we can't parse a date
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              eventDate = tomorrow;
+              // Try to extract specific dates like March 18
+              const specificDateMatch = combinedText.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(\d{4}))?\b/i);
+              if (specificDateMatch) {
+                const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+                const monthText = specificDateMatch[1].toLowerCase();
+                const monthIndex = monthNames.findIndex(m => monthText.startsWith(m.substring(0, 3)));
+                const day = parseInt(specificDateMatch[2]);
+                const year = specificDateMatch[3] ? parseInt(specificDateMatch[3]) : new Date().getFullYear();
+                
+                if (monthIndex >= 0 && day > 0 && day <= 31) {
+                  eventDate = new Date(year, monthIndex, day);
+                } else {
+                  // Default to tomorrow if we can't parse a date
+                  const tomorrow = new Date();
+                  tomorrow.setDate(tomorrow.getDate() + 1);
+                  eventDate = tomorrow;
+                }
+              } else {
+                // Default to tomorrow if we can't parse a date
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                eventDate = tomorrow;
+              }
             }
           }
         } catch (error) {
@@ -216,6 +237,7 @@ const ChatInterface: React.FC = () => {
         
         // Set the event preview with all available data
         setEventPreview({
+          id: data.event.id || data.existing_event_id || undefined, // Include the ID if this is updating an existing event
           title: data.event.title || "New Event",
           date: eventDate,
           startTime: data.event.start_time || "",
@@ -343,7 +365,10 @@ const ChatInterface: React.FC = () => {
         }
       }
       
-      console.log("Saving event to database:", {
+      // Determine if we're updating an existing event or creating a new one
+      const isUpdating = !!eventPreview.id;
+      
+      console.log(isUpdating ? "Updating existing event:" : "Creating new event:", {
         title: eventPreview.title,
         start_time: startTime.toISOString(),
         end_time: endTime ? endTime.toISOString() : null,
@@ -352,28 +377,51 @@ const ChatInterface: React.FC = () => {
         recurrence_pattern: recurrencePattern
       });
       
-      // Save event to Supabase
-      const { data, error } = await supabase
-        .from('events')
-        .insert({
-          user_id: user.id,
-          title: eventPreview.title,
-          description: '', // Add a description field if needed
-          start_time: startTime.toISOString(),
-          end_time: endTime ? endTime.toISOString() : null,
-          location: eventPreview.location || null,
-          is_recurring: eventPreview.isRecurring || false,
-          recurrence_pattern: recurrencePattern,
-          source: 'chat'
-        });
-        
+      let result;
+      
+      if (isUpdating) {
+        // Update existing event
+        result = await supabase
+          .from('events')
+          .update({
+            title: eventPreview.title,
+            description: '', // Add a description field if needed
+            start_time: startTime.toISOString(),
+            end_time: endTime ? endTime.toISOString() : null,
+            location: eventPreview.location || null,
+            is_recurring: eventPreview.isRecurring || false,
+            recurrence_pattern: recurrencePattern,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', eventPreview.id)
+          .eq('user_id', user.id); // Ensure we're only updating user's own events
+          
+      } else {
+        // Create new event
+        result = await supabase
+          .from('events')
+          .insert({
+            user_id: user.id,
+            title: eventPreview.title,
+            description: '', // Add a description field if needed
+            start_time: startTime.toISOString(),
+            end_time: endTime ? endTime.toISOString() : null,
+            location: eventPreview.location || null,
+            is_recurring: eventPreview.isRecurring || false,
+            recurrence_pattern: recurrencePattern,
+            source: 'chat'
+          });
+      }
+      
+      const { error } = result;
       if (error) throw error;
       
       // Add confirmation message
+      const actionVerb = isUpdating ? "updated" : "added";
       const confirmationMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `Event "${eventPreview.title}" has been added to your calendar.`,
+        content: `Event "${eventPreview.title}" has been ${actionVerb} to your calendar.`,
         timestamp: new Date()
       };
       

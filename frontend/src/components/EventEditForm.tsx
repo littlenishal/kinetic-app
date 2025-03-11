@@ -1,4 +1,5 @@
 // frontend/src/components/EventEditForm.tsx
+// This updated version handles date and time construction correctly to prevent timezone issues
 import React, { useState } from 'react';
 import * as dateUtils from '../utils/dateUtils';
 import '../styles/EventEditForm.css';

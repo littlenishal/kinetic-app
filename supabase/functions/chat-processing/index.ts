@@ -107,8 +107,14 @@ Deno.serve(async (req) => {
     When the user asks to create a calendar event, you should respond conversationally and
     then our system will automatically extract the event details.
     
-    Example proper response:
+    When the user asks to modify an existing event, respond in a way that clearly indicates 
+    you're updating an existing event, not creating a new one.
+    
+    Example proper response for event creation:
     "I'll schedule your swim lessons weekly on Thursdays from 11:00 AM to 12:00 PM at Washington-Liberty High School until mid-June."
+    
+    Example proper response for event update:
+    "I've updated Maya's swim lessons to March 18th from 2:00 PM to 3:00 PM."
     
     Example INCORRECT response (never do this):
     "I'll schedule your swim lessons. Here are the details: **Title:** Swim Lessons, **Start Date:** 2025-03-09"
@@ -138,9 +144,38 @@ Deno.serve(async (req) => {
     // Analyze the message content to extract event information if needed
     let event = null;
     let intent = null;
+    let existingEventId = null;
+
+    // Check if this is an update to an existing event
+    const updateMatches = /update|change|move|reschedule|edit|modify|postpone|shift/i.test(message);
+    const eventNameMatches = message.match(/(?:update|change|move|reschedule|edit|modify)(?:\s+the)?(?:\s+event)?(?:\s+for)?\s+["']?([^"']+?)["']?\s+(?:to|from|at|on)/i);
+    const eventTitle = eventNameMatches ? eventNameMatches[1].trim() : null;
+
+    // If message appears to be about updating an event
+    if (updateMatches && eventTitle) {
+      intent = 'update_event';
+      
+      // Look for existing events with matching title
+      try {
+        const { data: existingEvents, error } = await supabase
+          .from('events')
+          .select('*')
+          .eq('user_id', user.id)
+          .ilike('title', `%${eventTitle}%`)
+          .order('start_time', { ascending: false })
+          .limit(1);
+        
+        if (!error && existingEvents && existingEvents.length > 0) {
+          existingEventId = existingEvents[0].id;
+          console.log(`Found existing event with ID ${existingEventId}`);
+        }
+      } catch (error) {
+        console.error('Error searching for existing events:', error);
+      }
+    }
     
     // If the message appears to be about creating an event
-    if (/schedule|calendar|event|appointment|meeting|lesson|class/i.test(message)) {
+    else if (/schedule|calendar|event|appointment|meeting|lesson|class/i.test(message)) {
       const dateMatch = /\b(tomorrow|today|\d{1,2}[-\/\.]\d{1,2}[-\/\.]\d{2,4}|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b|\b\d{1,2}\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.test(message);
       const timeMatch = /\b(from|at|between)?\s*\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)(?:\s*(?:to|-)\s*\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.))?/i.test(message);
       const dayNameMatch = /\b(?:next\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i.test(message);
@@ -201,6 +236,15 @@ Deno.serve(async (req) => {
           if (dayNameMatch && dayNameMatch[1]) {
             dateReference = dayNameMatch[1].toLowerCase();
           }
+          
+          // Try to extract specific dates like March 18
+          const specificDateMatch = message.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(\d{4}))?\b/i);
+          if (specificDateMatch) {
+            const month = specificDateMatch[1];
+            const day = specificDateMatch[2];
+            const year = specificDateMatch[3] || new Date().getFullYear().toString();
+            dateReference = `${month} ${day}, ${year}`;
+          }
         }
         
         // Check for recurring pattern
@@ -222,6 +266,7 @@ Deno.serve(async (req) => {
         
         // Format the extracted information into an event object
         event = {
+          id: existingEventId, // Include the existing event ID if found
           title: title,
           date: dateReference || "tomorrow", // Send the date reference instead of a formatted date
           start_time: startTime,
@@ -273,7 +318,8 @@ Deno.serve(async (req) => {
         message: assistantResponse,
         intent: intent,
         event: event,
-        events: events
+        events: events,
+        existing_event_id: existingEventId
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
