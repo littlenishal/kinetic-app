@@ -516,15 +516,18 @@ const ChatInterface: React.FC = () => {
       
       // Even on error, save the conversation with the error message
       try {
-        await supabase
-          .from('conversations')
-          .upsert({
-            user_id: user.id,
-            messages: updatedMessages,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id'
-          });
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          await supabase
+            .from('conversations')
+            .upsert({
+              user_id: currentUser.id,
+              messages: updatedMessages,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'user_id'
+            });
+        }
       } catch (saveError) {
         console.error('Failed to save conversation after event error:', saveError);
       }
@@ -601,15 +604,18 @@ const ChatInterface: React.FC = () => {
       
       // Even on error, save the conversation with the error message
       try {
-        await supabase
-          .from('conversations')
-          .upsert({
-            user_id: user.id,
-            messages: updatedMessages,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id'
-          });
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          await supabase
+            .from('conversations')
+            .upsert({
+              user_id: currentUser.id,
+              messages: updatedMessages,
+              updated_at: new Date().toISOString()
+            }, {
+              onConflict: 'user_id'
+            });
+        }
       } catch (saveError) {
         console.error('Failed to save conversation after event update error:', saveError);
       }
