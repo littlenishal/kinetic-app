@@ -189,6 +189,36 @@ Deno.serve(async (req) => {
         }
       }
     }
+    
+    // Handle direct edit commands
+    if (/\b(?:open|show|display|start|launch|bring up)(?:\s+the)?(?:\s+edit(?:or|ing)?)?(?:\s+(?:flow|form|interface))?\s+for\b/i.test(message)) {
+      const editCommandMatch = message.match(/\b(?:open|show|display|start|launch|bring up)(?:\s+the)?(?:\s+edit(?:or|ing)?)?(?:\s+(?:flow|form|interface))?\s+for\s+([^,.]+)/i);
+      
+      if (editCommandMatch) {
+        const searchTitle = editCommandMatch[1].trim();
+        intent = 'edit_event'; // Use a specific intent for explicit edit requests
+        
+        console.log(`Detected direct edit command for: "${searchTitle}"`);
+        
+        try {
+          // Search for the mentioned event
+          const queryResult = await supabase
+            .from('events')
+            .select('*')
+            .eq('user_id', user.id)
+            .ilike('title', `%${searchTitle}%`)
+            .order('start_time', { ascending: false })
+            .limit(1);
+            
+          if (!queryResult.error && queryResult.data && queryResult.data.length > 0) {
+            existingEventId = queryResult.data[0].id;
+            console.log(`Found existing event with ID ${existingEventId} for direct edit command`);
+          }
+        } catch (error) {
+          console.error('Error searching for events:', error);
+        }
+      }
+    }
 
     // If message appears to be about updating an event
     if (updateMatches && eventTitle) {

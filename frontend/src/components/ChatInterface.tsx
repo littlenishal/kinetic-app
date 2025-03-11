@@ -161,6 +161,16 @@ const ChatInterface: React.FC = () => {
       const data = await response.json();
       console.log("Response from chat processing:", data);
       
+      // Add this debug log here
+      console.log("API response data:", {
+        intent: data.intent,
+        existing_event_id: data.existing_event_id,
+        event: data.event ? {
+          id: data.event.id,
+          title: data.event.title
+        } : null
+      });
+      
       // Add assistant response to the chat
       const assistantMessage: Message = {
         id: Date.now().toString(),
@@ -172,12 +182,21 @@ const ChatInterface: React.FC = () => {
       setMessages(prevMessages => [...prevMessages, assistantMessage]);
       
       // Handle different event-related intents
-      if (data.intent === 'update_event' && (data.existing_event_id || (data.event && data.event.id))) {
-        // For update intents with identified events, show the edit form
-        const eventId = data.existing_event_id || data.event.id;
+      if ((data.intent === 'update_event' || data.intent === 'edit_event') && 
+        (data.existing_event_id || (data.event && data.event.id))) {
+        // For update/edit intents with identified events, show the edit form
+        const eventId = data.existing_event_id || (data.event && data.event.id);
         console.log(`Showing edit form for event ID: ${eventId}`);
-        setEventEditId(eventId);
-        setEventPreview(null);
+        console.log(`Setting eventEditId to: ${eventId}`);
+        console.log(`Current eventEditId before update: ${eventEditId}`);
+        
+        if (eventId) {
+          setEventEditId(eventId);
+          console.log(`EventEditId state set to: ${eventId}`);
+          setEventPreview(null);
+        } else {
+          console.error("No event ID found for edit/update intent");
+        }
       } 
       else if (data.event) {
         // For new events or unidentified updates, show the preview
@@ -537,10 +556,24 @@ const ChatInterface: React.FC = () => {
     );
   };
 
+  // Log before the return statement
+  console.log("Rendering ChatInterface with states:", { 
+    eventEditId, 
+    eventPreview: eventPreview ? true : false 
+  });
+
+  // Ensure your EventEditPreview component is rendered correctly in the ChatInterface.tsx return block:
   return (
     <div className="chat-interface">
       <div className="messages-container">
         {messages.map(renderMessage)}
+        
+        {/* Debug message to confirm component rendering logic */}
+        {eventEditId && (
+          <div style={{ display: 'none' }}>
+            Attempting to render EventEditPreview with ID: {eventEditId}
+          </div>
+        )}
         
         {/* Event preview card for new events */}
         {eventPreview && (
@@ -575,21 +608,7 @@ const ChatInterface: React.FC = () => {
       </div>
       
       <form className="message-input-form" onSubmit={handleSendMessage}>
-        <input
-          type="text"
-          value={inputMessage}
-          onChange={handleInputChange}
-          placeholder="Type a message..."
-          disabled={loading}
-          className="message-input"
-        />
-        <button 
-          type="submit" 
-          disabled={loading || !inputMessage.trim()} 
-          className="send-button"
-        >
-          Send
-        </button>
+        {/* Form contents */}
       </form>
     </div>
   );
