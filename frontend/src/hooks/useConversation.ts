@@ -18,6 +18,7 @@ export default function useConversation() {
         const { messages: loadedMessages, id } = await chatService.fetchConversation();
         
         if (loadedMessages.length > 0) {
+          console.log(`Loaded ${loadedMessages.length} messages from conversation ${id}`);
           setMessages(loadedMessages);
           setConversationId(id);
         } else {
@@ -33,7 +34,10 @@ export default function useConversation() {
           const { success, id: newId } = await chatService.saveConversation([welcomeMessage]);
           
           if (success && newId) {
+            console.log(`Created new conversation with ID ${newId}`);
             setConversationId(newId);
+          } else {
+            console.error("Failed to create new conversation");
           }
         }
       } catch (error) {
@@ -47,29 +51,59 @@ export default function useConversation() {
     loadConversation();
   }, []);
   
+  // Save all messages to the conversation
+  const saveMessages = useCallback(async (messagesToSave: Message[]) => {
+    if (!initialized) return false;
+    
+    try {
+      console.log(`Saving ${messagesToSave.length} messages to conversation ${conversationId || 'new'}`);
+      const { success, id } = await chatService.saveConversation(messagesToSave, conversationId);
+      
+      if (success && id && !conversationId) {
+        console.log(`Setting conversation ID to ${id}`);
+        setConversationId(id);
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('Error saving messages:', error);
+      return false;
+    }
+  }, [conversationId, initialized]);
+  
   // Add a user message to the conversation
   const addUserMessage = useCallback(async (content: string) => {
+    // Create new message
     const userMessage = createMessage('user', content);
+    
+    console.log('Adding user message:', content);
+    
+    // Update local state first for immediate UI update
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     
     // Save conversation with user message
-    await chatService.saveConversation(updatedMessages, conversationId);
+    await saveMessages(updatedMessages);
     
     return updatedMessages;
-  }, [messages, conversationId]);
+  }, [messages, saveMessages]);
   
   // Add an assistant/system message to the conversation
   const addAssistantMessage = useCallback(async (content: string) => {
+    // Create new message
     const assistantMessage = createMessage('assistant', content);
+    
+    console.log('Adding assistant message:', content.substring(0, 50) + (content.length > 50 ? '...' : ''));
+    
+    // Update local state first for immediate UI update
     const updatedMessages = [...messages, assistantMessage];
     setMessages(updatedMessages);
     
     // Save conversation with assistant message
-    await chatService.saveConversation(updatedMessages, conversationId);
+    await saveMessages(updatedMessages);
     
     return updatedMessages;
-  }, [messages, conversationId]);
+  }, [messages, saveMessages]);
   
   // Process a user message and get a response
   const processUserMessage = useCallback(async (
@@ -77,14 +111,15 @@ export default function useConversation() {
     searchTitle?: string
   ) => {
     try {
-      // First add user message
-      const updatedMessages = await addUserMessage(userContent);
+      // We don't need to add the user message here since it should already be added
+      // by the calling component before processing
+      const currentMessages = [...messages];
       
       // Process the message through the API
       setLoading(true);
       const response = await chatService.processMessage(
         userContent,
-        updatedMessages,
+        currentMessages,
         searchTitle
       );
       
@@ -111,7 +146,7 @@ export default function useConversation() {
     } finally {
       setLoading(false);
     }
-  }, [addUserMessage, addAssistantMessage]);
+  }, [messages, addAssistantMessage]);
   
   return {
     messages,
@@ -120,6 +155,7 @@ export default function useConversation() {
     conversationId,
     addUserMessage,
     addAssistantMessage,
-    processUserMessage
+    processUserMessage,
+    saveMessages
   };
-};
+}
