@@ -1,4 +1,4 @@
-// frontend/src/hooks/useEventManagement.ts - Enhanced version with search results handling
+// frontend/src/hooks/useEventManagement.ts - Enhanced version with conversation persistence
 import { useState, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
 import * as eventService from '../services/eventService';
@@ -25,15 +25,20 @@ export default function useEventManagement() {
   }, []);
   
   // Check if a message contains a direct edit request
+  // Return value indicates if message was handled as an edit request
   const checkMessageForEditRequest = useCallback(async (message: string) => {
     try {
+      console.log("Checking message for edit request:", message);
+      
       // Extract potential search term regardless of match result
       const extractedTitle = extractEventTitleFromMessage(message);
+      console.log("Extracted potential event title:", extractedTitle);
       
       // Check for direct edit intent
       const eventId = await checkForEditRequest(message);
       
       if (eventId) {
+        console.log("Found direct match for event ID:", eventId);
         // We found a direct match, open the edit form
         setEventEditId(eventId);
         setEventPreview(null);
@@ -41,6 +46,7 @@ export default function useEventManagement() {
         setShowSearchResults(false);
         return true;
       } else if (extractedTitle && extractedTitle.length >= 2) {
+        console.log("No direct match, but found potential title:", extractedTitle);
         // We have a potential title but no direct match, show search results
         setSearchTerm(extractedTitle);
         setShowSearchResults(true);
@@ -49,6 +55,7 @@ export default function useEventManagement() {
         return true;
       }
       
+      console.log("No edit request detected");
       return false;
     } catch (error) {
       console.error('Error checking for edit request:', error);
@@ -58,6 +65,7 @@ export default function useEventManagement() {
   
   // Handle selecting event from search results
   const handleSelectEventFromSearch = useCallback((eventId: string) => {
+    console.log("Selected event from search results:", eventId);
     setEventEditId(eventId);
     setSearchTerm(null);
     setShowSearchResults(false);
@@ -65,6 +73,7 @@ export default function useEventManagement() {
   
   // Cancel showing search results
   const handleCancelSearch = useCallback(() => {
+    console.log("Cancelling search results");
     setSearchTerm(null);
     setShowSearchResults(false);
   }, []);
@@ -75,6 +84,8 @@ export default function useEventManagement() {
     messageText: string,
     searchTitle?: string
   ) => {
+    console.log("Processing API response for event actions:", apiResponse.intent);
+    
     // Check for explicit edit/update intents
     if ((apiResponse.intent === 'update_event' || apiResponse.intent === 'edit_event')) {
       // First check if we have an explicit event ID from the API
@@ -149,6 +160,8 @@ export default function useEventManagement() {
     if (!eventPreview) return { success: false, error: 'No event preview to confirm' };
     
     try {
+      console.log("Confirming event from preview:", eventPreview);
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
       
@@ -161,6 +174,8 @@ export default function useEventManagement() {
       if (!result.success) {
         throw new Error(result.error);
       }
+      
+      console.log("Event saved successfully:", result.data);
       
       // Clear the preview after successful save
       setEventPreview(null);
@@ -183,6 +198,8 @@ export default function useEventManagement() {
   // Handle saving an edited event
   const saveEditedEvent = useCallback(async (updatedEvent: any) => {
     try {
+      console.log("Saving edited event:", updatedEvent);
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
       
@@ -192,6 +209,8 @@ export default function useEventManagement() {
       if (!result.success) {
         throw new Error(result.error);
       }
+      
+      console.log("Event updated successfully:", result.data);
       
       // Clear the edit state
       setEventEditId(null);
@@ -212,6 +231,7 @@ export default function useEventManagement() {
   
   // Cancel event preview or edit
   const cancelEvent = useCallback(() => {
+    console.log("Cancelling event action");
     setEventPreview(null);
     setEventEditId(null);
     setSearchTerm(null);

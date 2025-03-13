@@ -20,6 +20,7 @@ const ChatInterface: React.FC = () => {
     messages,
     loading,
     processUserMessage,
+    addUserMessage,
     addAssistantMessage
   } = useConversation();
   
@@ -61,10 +62,14 @@ const ChatInterface: React.FC = () => {
     const messageText = inputMessage.trim();
     setInputMessage('');
     
+    // Add user message to the conversation immediately
+    await addUserMessage(messageText);
+    
     // First, check if this is a direct edit request
     const isEditRequest = await checkMessageForEditRequest(messageText);
     if (isEditRequest) {
-      // No need to process via API if it's a direct edit request
+      // If it's an edit request, add a response indicating we're processing it
+      await addAssistantMessage("I'll help you update that event. Opening the editor...");
       return;
     }
     
@@ -97,7 +102,10 @@ const ChatInterface: React.FC = () => {
       // Add confirmation message to conversation
       const action = result.isUpdate ? 'updated' : 'added';
       const content = `Event "${result.title}" has been ${action} to your calendar.`;
-      await processUserMessage(`Confirm ${result.title}`);
+      await addAssistantMessage(content);
+    } else {
+      // Add error message to conversation
+      await addAssistantMessage(`I couldn't save the event. ${result.error || 'Please try again.'}`);
     }
   };
 
@@ -107,8 +115,11 @@ const ChatInterface: React.FC = () => {
     
     if (result.success) {
       // Add confirmation message to conversation
-      const content = `Event "${result.title}" has been updated in your calendar.`;
-      await processUserMessage(`Save updated ${result.title}`);
+      const content = `I've updated "${result.title}" in your calendar.`;
+      await addAssistantMessage(content);
+    } else {
+      // Add error message to conversation
+      await addAssistantMessage(`I couldn't update the event. ${result.error || 'Please try again.'}`);
     }
   };
   
@@ -117,6 +128,13 @@ const ChatInterface: React.FC = () => {
     handleSelectEventFromSearch(eventId);
     // Add a message to indicate the event was found
     await addAssistantMessage("Opening the event editor...");
+  };
+  
+  // Handle cancel actions
+  const handleCancelEventAction = async () => {
+    cancelEvent();
+    // Add a message to indicate the action was cancelled
+    await addAssistantMessage("I've cancelled the event action. Is there something else you'd like to do?");
   };
 
   // Render message bubbles
@@ -148,7 +166,7 @@ const ChatInterface: React.FC = () => {
           <EventPreview 
             event={eventPreview}
             onConfirm={handleConfirmEvent}
-            onCancel={cancelEvent}
+            onCancel={handleCancelEventAction}
           />
         )}
         
@@ -166,7 +184,7 @@ const ChatInterface: React.FC = () => {
           <EventEditPreview
             eventId={eventEditId}
             onSave={handleEventEditSave}
-            onCancel={cancelEvent}
+            onCancel={handleCancelEventAction}
           />
         )}
         
