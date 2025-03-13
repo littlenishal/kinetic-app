@@ -1,6 +1,6 @@
 // frontend/src/services/chatService.ts
 import { supabase } from './supabaseClient';
-import { Message } from '../utils/messageUtils';
+import { Message, processMessageTimestamps } from '../utils/messageUtils';
 
 interface ProcessMessageResult {
   message: string;
@@ -30,6 +30,15 @@ export const processMessage = async (
     // Define the endpoint
     const endpoint = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/chat-processing`;
     
+    // Prepare conversation history - make sure we have both user and assistant messages
+    // Only use the last 10 messages for context
+    const recentHistory = conversationHistory.slice(-10).map(msg => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+    
+    console.log(`Sending ${recentHistory.length} messages to chat processing endpoint`);
+    
     // Call Supabase Edge Function with proper authentication
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -39,7 +48,7 @@ export const processMessage = async (
       },
       body: JSON.stringify({
         message,
-        conversation_history: conversationHistory.slice(-10), // Send last 10 messages for context
+        conversation_history: recentHistory,
         search_title: searchTitle // Pass potential event title for more accurate matching
       }),
     });
@@ -83,12 +92,19 @@ export const saveConversation = async (
     }
     
     // Ensure message timestamps are serialized properly
-    const processedMessages = messages.map(msg => ({
-      ...msg,
-      timestamp: msg.timestamp instanceof Date 
-        ? msg.timestamp.toISOString() 
-        : msg.timestamp
-    }));
+    const processedMessages = processMessageTimestamps(messages);
+    
+    console.log(`Saving conversation with ${processedMessages.length} messages. Conversation ID: ${conversationId || 'new'}`);
+    
+    // Log some sample messages for debugging
+    if (processedMessages.length > 0) {
+      const lastFew = processedMessages.slice(-3);
+      console.log('Last few messages:', lastFew.map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content.substring(0, 30) + (m.content.length > 30 ? '...' : '')
+      })));
+    }
     
     // If we have a conversation ID, update that conversation
     if (conversationId) {
@@ -106,6 +122,7 @@ export const saveConversation = async (
         return { success: false };
       }
       
+      console.log(`Successfully updated conversation ${conversationId}`);
       return { success: true, id: conversationId };
     } 
     // Otherwise create a new conversation
@@ -126,6 +143,7 @@ export const saveConversation = async (
         return { success: false };
       }
       
+      console.log(`Successfully created new conversation ${data?.id}`);
       return { success: true, id: data?.id };
     }
   } catch (error) {
@@ -147,6 +165,8 @@ export const fetchConversation = async (): Promise<{ messages: Message[]; id: st
       return { messages: [], id: null };
     }
     
+    console.log("Fetching conversation for user:", user.id);
+    
     const { data, error } = await supabase
       .from('conversations')
       .select('*')
@@ -159,16 +179,32 @@ export const fetchConversation = async (): Promise<{ messages: Message[]; id: st
       return { messages: [], id: null };
     }
     
-    if (data && data.length > 0 && Array.isArray(data[0].messages) && data[0].messages.length > 0) {
+    if (data && data.length > 0 && Array.isArray(data[0].messages)) {
+      console.log(`Found conversation ${data[0].id} with ${data[0].messages.length} messages`);
+      
+      // Ensure message structure is correct
+      if (data[0].messages.length === 0) {
+        return { messages: [], id: data[0].id };
+      }
+      
       // Parse the messages and ensure timestamp is a Date object
-      const parsedMessages = data[0].messages.map((msg: Message) => ({
-        ...msg,
+      const parsedMessages = data[0].messages.map((msg: any) => ({
+        id: msg.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
         timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp)
       }));
+      
+      // Verify we have both user and assistant messages
+      const userMessages = parsedMessages.filter((m: Message) => m.role === 'user').length;
+      const assistantMessages = parsedMessages.filter((m: Message) => m.role === 'assistant').length;
+      
+      console.log(`User messages: ${userMessages}, Assistant messages: ${assistantMessages}`);
       
       return { messages: parsedMessages, id: data[0].id };
     }
     
+    console.log("No conversation found or empty conversation");
     return { messages: [], id: null };
   } catch (error) {
     console.error('Error in fetchConversation:', error);

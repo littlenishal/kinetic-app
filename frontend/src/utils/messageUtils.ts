@@ -18,6 +18,13 @@ export interface Message {
   }
   
   /**
+   * Generate a unique ID for a message
+   */
+  const generateMessageId = (): string => {
+    return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  };
+  
+  /**
    * Create a new message object
    */
   export const createMessage = (
@@ -25,7 +32,7 @@ export interface Message {
     content: string
   ): Message => {
     return {
-      id: Date.now().toString(),
+      id: generateMessageId(),
       role,
       content,
       timestamp: new Date()
@@ -50,6 +57,17 @@ export interface Message {
       timestamp: msg.timestamp instanceof Date 
         ? msg.timestamp.toISOString() 
         : msg.timestamp
+    }));
+  };
+  
+  /**
+   * Ensure all messages have valid IDs
+   * Sometimes messages might be missing IDs when loaded from the database
+   */
+  export const ensureMessageIds = (messages: Message[]): Message[] => {
+    return messages.map(msg => ({
+      ...msg,
+      id: msg.id || generateMessageId()
     }));
   };
   
