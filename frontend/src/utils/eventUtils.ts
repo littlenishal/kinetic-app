@@ -410,4 +410,4 @@ export const prepareEventForSaving = (
     data: eventData,
     isUpdating
   };
-};
+};  

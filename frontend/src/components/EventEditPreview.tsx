@@ -74,11 +74,30 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
         const endDate = data.end_time ? new Date(data.end_time) : null;
         
         setTitle(data.title);
-        setDate(startDate.toISOString().split('T')[0]); // Format as YYYY-MM-DD
-        setStartTime(startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+        
+        // Format the date in local timezone to prevent any UTC conversion issues
+        // YYYY-MM-DD format for the input
+        const localDate = new Date(startDate.getTime());
+        const year = localDate.getFullYear();
+        const month = String(localDate.getMonth() + 1).padStart(2, '0');
+        const day = String(localDate.getDate()).padStart(2, '0');
+        setDate(`${year}-${month}-${day}`);
+        
+        // Format times in 24-hour format (HH:MM)
+        setStartTime(startDate.toLocaleTimeString([], { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }));
+        
         if (endDate) {
-          setEndTime(endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }));
+          setEndTime(endDate.toLocaleTimeString([], { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+          }));
         }
+        
         setLocation(data.location || '');
         
       } catch (err) {
@@ -98,13 +117,13 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
     if (!event) return;
     
     try {
-      // Parse the date components
+      // Parse the date components from the input field
       const [year, month, day] = date.split('-').map(Number);
       
-      // Create start time
+      // Create start time - ensure we're working with local time
       const [startHours, startMinutes] = startTime.split(':').map(Number);
       const startDateTime = new Date();
-      startDateTime.setFullYear(year, month - 1, day);
+      startDateTime.setFullYear(year, month - 1, day); // month is 0-indexed
       startDateTime.setHours(startHours, startMinutes, 0, 0);
       
       // Create end time if provided
@@ -141,6 +160,24 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
     }
   };
   
+  // Format date string for display with proper localization
+  const getFormattedDateDisplay = (dateStr: string): string => {
+    try {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      
+      return date.toLocaleDateString(undefined, { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    } catch (err) {
+      console.error('Error formatting date display:', err);
+      return '';
+    }
+  };
+  
   if (loading) {
     return (
       <div className="event-edit-preview loading">
@@ -159,15 +196,7 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
     );
   }
   
-  // Format date for display (e.g., "Friday, March 21, 2025")
-  const formattedDate = date 
-    ? new Date(date).toLocaleDateString(undefined, { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      }) 
-    : '';
+  const formattedDate = date ? getFormattedDateDisplay(date) : '';
   
   return (
     <div className="event-edit-preview">
@@ -194,11 +223,11 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
             onChange={(e) => setDate(e.target.value)}
             required
           />
-          <div className="date-display">{formattedDate}</div>
+          {formattedDate && <div className="date-display">{formattedDate}</div>}
         </div>
         
         <div className="form-row">
-          <div className="form-group">
+          <div className="form-group time-field">
             <label htmlFor="startTime">Start Time</label>
             <input
               type="time"
@@ -209,7 +238,7 @@ const EventEditPreview: React.FC<EventEditPreviewProps> = ({
             />
           </div>
           
-          <div className="form-group">
+          <div className="form-group time-field">
             <label htmlFor="endTime">End Time</label>
             <input
               type="time"

@@ -7,6 +7,7 @@
     padding: 20px;
     margin: 12px 0;
     width: 90%;
+    max-width: 450px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     border-left: 4px solid #f59e0b;
     animation: slideIn 0.3s ease-out;
@@ -50,6 +51,12 @@
     font-size: 15px;
   }
   
+  /* Fix the time fields */
+  .event-edit-preview .time-field input[type="time"] {
+    width: 100%;
+    max-width: 130px;
+  }
+  
   .event-edit-preview input:focus {
     outline: none;
     border-color: #0084ff;
@@ -58,11 +65,13 @@
   
   .event-edit-preview .form-row {
     display: flex;
-    gap: 12px;
+    gap: 16px;
+    flex-wrap: wrap;
   }
   
   .event-edit-preview .form-row .form-group {
     flex: 1;
+    min-width: 120px;
   }
   
   .event-edit-preview .date-display {
@@ -143,5 +152,9 @@
     .event-edit-preview .form-row {
       flex-direction: column;
       gap: 14px;
+    }
+    
+    .event-edit-preview .time-field input[type="time"] {
+      max-width: 100%;
     }
   }
