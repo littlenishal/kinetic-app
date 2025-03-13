@@ -18,7 +18,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ userEmail, onSignIn, onSignOut })
   
   return (
     <header className="app-header">
-      <h1>Family Assistant</h1>
+      <h1>KINETIC</h1>
       
       {userEmail ? (
         <div className="user-menu">
