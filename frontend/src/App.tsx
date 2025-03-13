@@ -122,7 +122,7 @@ function App() {
           </>
         ) : (
           <div className="welcome-container">
-            <h2>Welcome to Family Assistant</h2>
+            <h2>Welcome to KINETIC</h2>
             <p>
               A chat-based family management app that helps busy families organize 
               their lives through natural language interactions.
