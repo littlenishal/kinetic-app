@@ -6,8 +6,10 @@ import useConversation from '../hooks/useConversation';
 import useEventManagement from '../hooks/useEventManagement';
 import EventPreview from './EventPreview';
 import EventEditPreview from './EventEditPreview';
+import EventSearchResults from './EventSearchResults';
 import '../styles/ChatInterface.css';
 import '../styles/EventEditPreview.css';
+import '../styles/EventSearchResults.css';
 
 const ChatInterface: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -17,15 +19,20 @@ const ChatInterface: React.FC = () => {
   const {
     messages,
     loading,
-    processUserMessage
+    processUserMessage,
+    addAssistantMessage
   } = useConversation();
   
   const {
     eventPreview,
     eventEditId,
+    searchTerm,
+    showSearchResults,
     resetEventStates,
     checkMessageForEditRequest,
     handleEventFromApiResponse,
+    handleSelectEventFromSearch,
+    handleCancelSearch,
     confirmEvent,
     saveEditedEvent,
     cancelEvent
@@ -39,7 +46,7 @@ const ChatInterface: React.FC = () => {
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, eventPreview, eventEditId, showSearchResults]);
 
   // Handle form submission
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -69,7 +76,16 @@ const ChatInterface: React.FC = () => {
     
     if (success && response) {
       // Handle potential event actions based on the API response
-      await handleEventFromApiResponse(response, messageText, searchTitle);
+      const result = await handleEventFromApiResponse(response, messageText, searchTitle);
+      
+      // If we couldn't find an event to edit and didn't show search results
+      if (response.intent === 'update_event' && result.action === 'none') {
+        // Add a helper message
+        await addAssistantMessage(
+          "I couldn't find that specific event in your calendar. " +
+          "You can view and edit all your events in the calendar tab."
+        );
+      }
     }
   };
 
@@ -94,6 +110,13 @@ const ChatInterface: React.FC = () => {
       const content = `Event "${result.title}" has been updated in your calendar.`;
       await processUserMessage(`Save updated ${result.title}`);
     }
+  };
+  
+  // Handle selecting event from search results
+  const handleSelectEvent = async (eventId: string) => {
+    handleSelectEventFromSearch(eventId);
+    // Add a message to indicate the event was found
+    await addAssistantMessage("Opening the event editor...");
   };
 
   // Render message bubbles
@@ -129,6 +152,15 @@ const ChatInterface: React.FC = () => {
           />
         )}
         
+        {/* Event search results when we're looking for an event to edit */}
+        {showSearchResults && searchTerm && (
+          <EventSearchResults
+            searchTerm={searchTerm}
+            onSelectEvent={handleSelectEvent}
+            onCancel={handleCancelSearch}
+          />
+        )}
+        
         {/* Event edit form for updating existing events */}
         {eventEditId && (
           <EventEditPreview
@@ -159,12 +191,12 @@ const ChatInterface: React.FC = () => {
           value={inputMessage}
           onChange={handleInputChange}
           placeholder="Type a message..."
-          disabled={loading || !!eventEditId} // Disable input when editing an event
+          disabled={loading || !!eventEditId || showSearchResults} // Disable during event interactions
         />
         <button 
           type="submit" 
           className="send-button"
-          disabled={!inputMessage.trim() || loading || !!eventEditId} // Disable send button when editing
+          disabled={!inputMessage.trim() || loading || !!eventEditId || showSearchResults}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>

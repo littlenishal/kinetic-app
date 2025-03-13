@@ -1,4 +1,5 @@
-// frontend/src/utils/eventUtils.ts
+// Enhanced eventUtils.ts with improved edit detection
+
 import { supabase } from '../services/supabaseClient';
 import * as dateUtils from './dateUtils';
 
@@ -14,16 +15,27 @@ export interface EventPreviewData {
   recurrencePattern?: string;
 }
 
-// Patterns for detecting edit commands in user input
+// Enhanced patterns for detecting edit commands in user input
 export const EDIT_COMMAND_PATTERNS = [
+  // Direct edit commands
   /\b(?:edit|modify|update|change)\s+(?:my|the)?\s+([a-z0-9\s'-]+?)(?:\s+event)?\s*$/i,
   /\bopen\s+(?:the)?\s+(?:editor|form|edit(?:\s+form)?)\s+for\s+([a-z0-9\s'-]+)(?:\s+event)?\s*$/i,
   /\bmake\s+changes\s+to\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\s*$/i,
-  /\blet\s+me\s+edit\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\s*$/i
+  /\blet\s+me\s+edit\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\s*$/i,
+  
+  // Indirect edit patterns
+  /\bneed\s+to\s+(?:update|change|modify)\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i,
+  /\bwant\s+to\s+(?:update|change|modify)\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i,
+  /\bcan\s+(?:you|I|we)\s+(?:update|change|modify)\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i,
+  /\b(?:update|change|modify)\s+(?:the|my)?\s+(?:time|date|location|details)\s+(?:of|for)\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i,
+  
+  // Possessive forms
+  /\b(?:edit|update|change|modify)\s+([a-z][a-z']*(?:'s))\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i
 ];
 
 /**
- * Check for edit requests provided directly by user
+ * Check for edit requests in user message
+ * Returns eventId if found, null otherwise
  */
 export const checkForEditRequest = async (message: string): Promise<string | null> => {
   console.log("Checking for edit request in:", message);
@@ -31,15 +43,38 @@ export const checkForEditRequest = async (message: string): Promise<string | nul
   // Try each pattern to extract event title
   for (const pattern of EDIT_COMMAND_PATTERNS) {
     const match = message.match(pattern);
+    if (match) {
+      // Handle possessive form pattern (e.g., "edit Maya's soccer practice")
+      if (pattern.toString().includes("'s")) {
+        if (match[1] && match[2]) {
+          const possessiveTitle = `${match[1]} ${match[2]}`.trim();
+          console.log(`Detected possessive edit request: "${possessiveTitle}"`);
+          const eventId = await findEventByTitle(possessiveTitle);
+          if (eventId) return eventId;
+        }
+      }
+      // Handle standard patterns
+      else if (match[1]) {
+        const eventTitle = match[1].trim();
+        console.log(`Detected edit request for: "${eventTitle}"`);
+        const eventId = await findEventByTitle(eventTitle);
+        if (eventId) return eventId;
+      }
+    }
+  }
+  
+  // Additional check for "reschedule" and similar terms
+  const reschedulePatterns = [
+    /\b(?:reschedule|postpone|move)\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i
+  ];
+  
+  for (const pattern of reschedulePatterns) {
+    const match = message.match(pattern);
     if (match && match[1]) {
       const eventTitle = match[1].trim();
-      console.log(`Detected edit request for: "${eventTitle}"`);
-      
-      // Try to find the event in the database
+      console.log(`Detected reschedule request for: "${eventTitle}"`);
       const eventId = await findEventByTitle(eventTitle);
-      if (eventId) {
-        return eventId;
-      }
+      if (eventId) return eventId;
     }
   }
   
@@ -47,10 +82,10 @@ export const checkForEditRequest = async (message: string): Promise<string | nul
 };
 
 /**
- * Find event by title
+ * Find event by title with improved fuzzy matching
  */
 export const findEventByTitle = async (searchTitle: string): Promise<string | null> => {
-  if (!searchTitle || searchTitle.trim().length < 3) {
+  if (!searchTitle || searchTitle.trim().length < 2) {
     console.log("Search title too short or empty");
     return null;
   }
@@ -96,10 +131,10 @@ export const findEventByTitle = async (searchTitle: string): Promise<string | nu
       events = partialEvents;
     }
     
-    // If still no match, try with words
+    // If still no match, try with individual words
     if (!events || events.length === 0) {
-      // Try matching individual words (for longer titles)
-      const words = searchTitle.split(/\s+/).filter(word => word.length > 3);
+      // Split into words and filter out very short words
+      const words = searchTitle.split(/\s+/).filter(word => word.length > 2);
       
       for (const word of words) {
         const { data: wordEvents, error: wordError } = await supabase
@@ -108,7 +143,7 @@ export const findEventByTitle = async (searchTitle: string): Promise<string | nu
           .eq('user_id', user.id)
           .ilike('title', `%${word}%`)
           .order('start_time', { ascending: false })
-          .limit(5);
+          .limit(1);
           
         if (wordError) {
           console.error(`Error in word match lookup for "${word}":`, wordError);
@@ -122,6 +157,7 @@ export const findEventByTitle = async (searchTitle: string): Promise<string | nu
       }
     }
     
+    // If we found an event, return its ID
     if (events && events.length > 0) {
       console.log(`Found event: "${events[0].title}" (ID: ${events[0].id})`);
       return events[0].id;
@@ -137,9 +173,75 @@ export const findEventByTitle = async (searchTitle: string): Promise<string | nu
 };
 
 /**
- * Extract potential event title from message text
+ * Search for events that match a search term
+ * Returns an array of matching events
+ */
+export const searchEvents = async (searchTerm: string, limit = 5): Promise<any[]> => {
+  if (!searchTerm || searchTerm.trim().length < 2) {
+    return [];
+  }
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      console.log("No authenticated user found");
+      return [];
+    }
+    
+    // Try a partial match
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('user_id', user.id)
+      .ilike('title', `%${searchTerm}%`)
+      .order('start_time', { ascending: false })
+      .limit(limit);
+      
+    if (error) {
+      console.error('Error searching events:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('Error in searchEvents:', error);
+    return [];
+  }
+};
+
+/**
+ * Extract potential event title from message text with improved precision
  */
 export const extractEventTitleFromMessage = (message: string): string => {
+  // Check for common edit patterns first
+  for (const pattern of EDIT_COMMAND_PATTERNS) {
+    const match = message.match(pattern);
+    if (match && match[1]) {
+      // For possessive patterns
+      if (pattern.toString().includes("'s") && match[2]) {
+        return `${match[1]} ${match[2]}`.trim();
+      }
+      return match[1].trim();
+    }
+  }
+  
+  // Check for reschedule patterns
+  const rescheduleMatch = message.match(
+    /\b(?:reschedule|postpone|move)\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i
+  );
+  if (rescheduleMatch && rescheduleMatch[1]) {
+    return rescheduleMatch[1].trim();
+  }
+  
+  // Check for change patterns
+  const changeMatch = message.match(
+    /\b(?:change|update)\s+(?:the)?\s+(?:time|date|location|details)\s+(?:of|for)\s+(?:my|the)?\s+([a-z0-9\s'-]+)(?:\s+event)?\b/i
+  );
+  if (changeMatch && changeMatch[1]) {
+    return changeMatch[1].trim();
+  }
+  
+  // Fallback to original implementation
   const eventTitleMatches = message.match(
     /(?:update|change|move|reschedule|edit)(?:\s+the)?(?:\s+)(?:([a-z']+(?:'s|s))\s+([a-z\s]+))/i
   );
