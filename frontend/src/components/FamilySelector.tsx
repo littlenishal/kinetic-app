@@ -8,6 +8,14 @@ interface Family {
   name: string;
 }
 
+interface FamilyMemberData {
+  family_id: string;
+  families: {
+    id: string;
+    name: string;
+  };
+}
+
 interface FamilySelectorProps {
   currentFamilyId: string | null;
   onFamilyChange: (familyId: string | null) => void;
@@ -49,12 +57,19 @@ const FamilySelector: React.FC<FamilySelectorProps> = ({
         if (error) throw error;
         
         // Transform the result to get a clean families array
-        const userFamilies = data
-          .filter(item => item.families)
-          .map(item => ({
-            id: item.families.id,
-            name: item.families.name
-          }));
+        const userFamilies: Family[] = [];
+        
+        // Safely process the data
+        if (data && Array.isArray(data)) {
+          data.forEach((item: FamilyMemberData) => {
+            if (item.families && typeof item.families === 'object') {
+              userFamilies.push({
+                id: item.families.id,
+                name: item.families.name
+              });
+            }
+          });
+        }
         
         setFamilies(userFamilies);
       } catch (error) {
