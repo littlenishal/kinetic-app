@@ -1,12 +1,6 @@
 // frontend/src/services/familyService.ts
 import { supabase } from './supabaseClient';
-
-export interface Family {
-  id: string;
-  name: string;
-  created_by: string;
-  created_at: string;
-}
+import { Family } from '../contexts/FamilyContext';
 
 export interface FamilyMember {
   id: string;
@@ -64,7 +58,13 @@ export const createFamily = async (name: string): Promise<{ success: boolean; da
       
     if (memberError) throw memberError;
     
-    return { success: true, data: familyData };
+    // Return with userRole added
+    const familyWithRole: Family = {
+      ...familyData,
+      userRole: 'owner'
+    };
+    
+    return { success: true, data: familyWithRole };
   } catch (error) {
     console.error('Error creating family:', error);
     return { 
@@ -102,12 +102,29 @@ export const getUserFamilies = async (): Promise<{ success: boolean; data?: Fami
     if (error) throw error;
     
     // Transform the result to get a clean families array
-    const userFamilies = data
-      .filter(item => item.families)
-      .map(item => ({
-        ...item.families,
-        userRole: item.role
-      }));
+    const userFamilies: Family[] = [];
+    
+    if (data && Array.isArray(data)) {
+      data.forEach((item: any) => {
+        if (item.families) {
+          // Handle case where families could be an object or an array
+          const familyData = Array.isArray(item.families) 
+            ? item.families[0] 
+            : item.families;
+            
+          if (familyData && familyData.id) {
+            // Add the userRole to the family object
+            userFamilies.push({
+              id: familyData.id,
+              name: familyData.name,
+              created_by: familyData.created_by,
+              created_at: familyData.created_at,
+              userRole: item.role
+            });
+          }
+        }
+      });
+    }
     
     return { success: true, data: userFamilies };
   } catch (error) {
@@ -161,7 +178,39 @@ export const getFamilyMembers = async (familyId: string): Promise<{ success: boo
       
     if (error) throw error;
     
-    return { success: true, data };
+    // Process data to ensure consistent structure
+    const processedMembers: FamilyMember[] = [];
+    
+    if (data && Array.isArray(data)) {
+      data.forEach((item: any) => {
+        const member: FamilyMember = {
+          id: item.id,
+          family_id: item.family_id,
+          user_id: item.user_id,
+          role: item.role,
+          joined_at: item.joined_at
+        };
+        
+        // Add profile if available
+        if (item.profiles) {
+          // Handle case where profiles could be an array
+          const profileData = Array.isArray(item.profiles) 
+            ? item.profiles[0]
+            : item.profiles;
+            
+          if (profileData) {
+            member.profile = {
+              id: profileData.id,
+              display_name: profileData.display_name
+            };
+          }
+        }
+        
+        processedMembers.push(member);
+      });
+    }
+    
+    return { success: true, data: processedMembers };
   } catch (error) {
     console.error('Error fetching family members:', error);
     return { 

@@ -5,6 +5,13 @@ import { useFamily } from '../contexts/FamilyContext';
 import { createFamily } from '../services/familyService';
 import '../styles/FamiliesPage.css';
 
+// Update the Family interface to include userRole
+interface Family {
+  id: string;
+  name: string;
+  userRole?: 'owner' | 'member';
+}
+
 const FamiliesPage: React.FC = () => {
   const navigate = useNavigate();
   const { families, loadingFamilies, refreshFamilies } = useFamily();
@@ -74,7 +81,7 @@ const FamiliesPage: React.FC = () => {
             </div>
           ) : (
             <div className="families-list">
-              {families.map((family) => (
+              {families.map((family: Family) => (
                 <div 
                   key={family.id} 
                   className="family-card"

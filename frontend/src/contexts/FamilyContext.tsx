@@ -1,7 +1,16 @@
 // frontend/src/contexts/FamilyContext.tsx
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '../services/supabaseClient';
-import { getUserFamilies, Family } from '../services/familyService';
+import { getUserFamilies } from '../services/familyService';
+
+// Updated Family interface with userRole
+export interface Family {
+  id: string;
+  name: string;
+  userRole?: 'owner' | 'member';
+  created_by?: string;
+  created_at?: string;
+}
 
 interface FamilyContextType {
   currentFamilyId: string | null;
