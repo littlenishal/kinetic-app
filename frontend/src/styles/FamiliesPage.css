@@ -1,0 +1,237 @@
+/* frontend/src/styles/FamiliesPage.css */
+
+.families-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 24px 16px;
+  }
+  
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  
+  .page-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+  }
+  
+  .create-button {
+    background-color: #0084ff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .create-button:hover {
+    background-color: #0077e6;
+  }
+  
+  .create-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  .families-container {
+    background-color: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .no-families {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+  }
+  
+  .no-families p {
+    margin: 10px 0;
+  }
+  
+  .families-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .family-card {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    border-radius: 8px;
+    background-color: #f7f9fc;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  
+  .family-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .family-icon {
+    font-size: 32px;
+    margin-right: 16px;
+  }
+  
+  .family-details {
+    flex: 1;
+  }
+  
+  .family-details h3 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: #333;
+  }
+  
+  .family-role {
+    font-size: 14px;
+    color: #666;
+    margin: 0;
+  }
+  
+  .view-details {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0084ff;
+  }
+  
+  .arrow-icon {
+    font-size: 20px;
+  }
+  
+  /* Create Family Modal */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+  }
+  
+  .modal-content {
+    width: 100%;
+    max-width: 500px;
+  }
+  
+  .create-family-form {
+    background-color: white;
+    border-radius: 8px;
+    padding: 24px;
+  }
+  
+  .create-family-form h2 {
+    margin: 0 0 16px;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .create-family-form .error-message {
+    background-color: #ffebee;
+    color: #d32f2f;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  
+  .create-family-form .form-group {
+    margin-bottom: 16px;
+  }
+  
+  .create-family-form label {
+    display: block;
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 8px;
+  }
+  
+  .create-family-form input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  
+  .create-family-form input:focus {
+    border-color: #0084ff;
+    box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.1);
+  }
+  
+  .create-family-form .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  
+  .create-family-form .cancel-button {
+    background-color: #f0f2f5;
+    color: #666;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .create-family-form .cancel-button:hover {
+    background-color: #e4e6eb;
+  }
+  
+  .create-family-form .cancel-button:disabled,
+  .create-family-form .create-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  /* Loading spinner */
+  .loading-spinner {
+    margin: 40px auto;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #0084ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Responsive styles */
+  @media (max-width: 480px) {
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .page-header button {
+      width: 100%;
+    }
+  }

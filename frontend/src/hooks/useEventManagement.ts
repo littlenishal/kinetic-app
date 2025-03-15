@@ -1,7 +1,8 @@
-// frontend/src/hooks/useEventManagement.ts - Enhanced version with conversation persistence
+// frontend/src/hooks/useEventManagement.ts - Enhanced version with family support
 import { useState, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
 import * as eventService from '../services/eventService';
+import { useFamily } from '../contexts/FamilyContext';
 import { EventPreviewData, 
   checkForEditRequest, 
   prepareEventForSaving, 
@@ -11,6 +12,7 @@ import { EventPreviewData,
   extractEventTitleFromMessage } from '../utils/eventUtils';
 
 export default function useEventManagement() {
+  const { currentFamilyId } = useFamily();
   const [eventPreview, setEventPreview] = useState<EventPreviewData | null>(null);
   const [eventEditId, setEventEditId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string | null>(null);
@@ -165,11 +167,11 @@ export default function useEventManagement() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
       
-      // Prepare event data for saving
-      const preparedData = prepareEventForSaving(eventPreview, user.id);
+      // Prepare event data for saving - pass currentFamilyId for proper ownership
+      const preparedData = prepareEventForSaving(eventPreview, user.id, currentFamilyId);
       
       // Save the event
-      const result = await eventService.saveEventFromPreview(eventPreview, preparedData);
+      const result = await eventService.saveEventFromPreview(eventPreview, preparedData, currentFamilyId);
       
       if (!result.success) {
         throw new Error(result.error);
@@ -193,7 +195,7 @@ export default function useEventManagement() {
         error: error instanceof Error ? error.message : 'Failed to save event'
       };
     }
-  }, [eventPreview]);
+  }, [eventPreview, currentFamilyId]);
   
   // Handle saving an edited event
   const saveEditedEvent = useCallback(async (updatedEvent: any) => {
@@ -203,8 +205,8 @@ export default function useEventManagement() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Authentication required');
       
-      // Update the event in the database
-      const result = await eventService.updateEvent(updatedEvent.id, updatedEvent);
+      // Update the event in the database - pass currentFamilyId
+      const result = await eventService.updateEvent(updatedEvent.id, updatedEvent, currentFamilyId);
       
       if (!result.success) {
         throw new Error(result.error);
@@ -227,7 +229,7 @@ export default function useEventManagement() {
         error: error instanceof Error ? error.message : 'Failed to update event'
       };
     }
-  }, []);
+  }, [currentFamilyId]);
   
   // Cancel event preview or edit
   const cancelEvent = useCallback(() => {

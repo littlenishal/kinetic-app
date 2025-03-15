@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import * as dateUtils from '../utils/dateUtils';
+import { useFamily } from '../contexts/FamilyContext';
 
 interface EventPreviewProps {
   event: {
@@ -16,6 +17,10 @@ interface EventPreviewProps {
 }
 
 const EventPreview: React.FC<EventPreviewProps> = ({ event, onConfirm, onCancel }) => {
+  const { families, currentFamilyId, setCurrentFamilyId } = useFamily();
+  const [selectedFamily, setSelectedFamily] = useState<string | null>(currentFamilyId);
+  const [showFamilySelect, setShowFamilySelect] = useState(false);
+  
   // Parse the date for display
   const eventDate = event.date instanceof Date ? event.date : new Date(event.date);
   
@@ -26,11 +31,25 @@ const EventPreview: React.FC<EventPreviewProps> = ({ event, onConfirm, onCancel 
   const dayName = eventDate.toLocaleDateString(undefined, { weekday: 'long' });
   
   // For time display, we'll use the raw time strings if available
-  // This preserves the original intent from the LLM without timezone conversion issues
   const displayStartTime = event.startTime || 
     (eventDate instanceof Date ? dateUtils.formatTime(eventDate) : '');
     
   const displayEndTime = event.endTime || '';
+
+  // Handle family selection change
+  const handleFamilyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setSelectedFamily(value === "personal" ? null : value);
+  };
+
+  // Handle confirm - will use the selected family
+  const handleConfirm = () => {
+    // If different from current context, update it
+    if (selectedFamily !== currentFamilyId) {
+      setCurrentFamilyId(selectedFamily);
+    }
+    onConfirm();
+  };
 
   return (
     <div className="event-preview-card">
@@ -59,10 +78,29 @@ const EventPreview: React.FC<EventPreviewProps> = ({ event, onConfirm, onCancel 
         </p>
       )}
       
+      {/* Family selection dropdown */}
+      {families.length > 0 && (
+        <div className="event-family-selection">
+          <label htmlFor="family-select">Add to:</label>
+          <select 
+            id="family-select" 
+            value={selectedFamily === null ? "personal" : selectedFamily}
+            onChange={handleFamilyChange}
+          >
+            <option value="personal">Personal Calendar</option>
+            {families.map(family => (
+              <option key={family.id} value={family.id}>
+                {family.name} Family Calendar
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      
       <div className="event-preview-actions">
         <button 
           className="confirm-button" 
-          onClick={onConfirm}
+          onClick={handleConfirm}
         >
           Add to Calendar
         </button>

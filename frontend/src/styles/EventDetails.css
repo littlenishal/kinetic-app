@@ -1,150 +1,128 @@
-/* frontend/src/styles/EventDetails.css */
+/* Add to frontend/src/styles/EventDetails.css */
 
-.event-details-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 16px;
-  }
-  
-  .event-details-content {
-    background-color: white;
-    border-radius: 12px;
-    width: 100%;
-    max-width: 500px;
-    max-height: 90vh;
-    overflow-y: auto;
-    position: relative;
-    padding: 24px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  }
-  
-  .close-button {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    background: none;
-    border: none;
-    font-size: 24px;
-    color: #999;
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-  }
-  
-  .close-button:hover {
-    color: #333;
-  }
-  
-  .event-title {
-    margin-top: 0;
-    margin-bottom: 24px;
-    font-size: 24px;
-    font-weight: 600;
-    color: #333;
-    padding-right: 30px; /* Make room for close button */
-  }
-  
-  .event-info-section {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  
-  .event-info-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-  }
-  
-  .info-icon {
-    font-size: 18px;
-    color: #666;
-  }
-  
-  .info-content {
-    flex: 1;
-  }
-  
-  .info-label {
-    font-size: 12px;
-    color: #999;
-    margin-bottom: 4px;
-  }
-  
-  .info-value {
-    font-size: 16px;
-    color: #333;
-  }
-  
-  .event-description {
-    margin-top: 16px;
-    border-top: 1px solid #eee;
-    padding-top: 16px;
-  }
-  
-  .event-description p {
-    font-size: 15px;
-    color: #555;
-    line-height: 1.5;
-    margin: 8px 0 0;
-  }
-  
-  .event-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 24px;
-  }
-  
-  .edit-button, .delete-button {
-    padding: 10px 16px;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s;
-  }
-  
-  .edit-button {
-    background-color: #f5f7fb;
-    color: #333;
-  }
-  
-  .edit-button:hover {
-    background-color: #e0e0e0;
-  }
-  
-  .delete-button {
-    background-color: #fff0f0;
-    color: #e53935;
-  }
-  
-  .delete-button:hover {
-    background-color: #ffebee;
-  }
-  
-  @media (max-width: 480px) {
-    .event-details-content {
-      padding: 16px;
-      max-width: none;
-      border-radius: 10px;
-    }
-    
-    .event-title {
-      font-size: 20px;
-    }
-    
-    .info-value {
-      font-size: 15px;
-    }
-  }
+/* Event ownership section */
+.event-ownership {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.ownership-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ownership-badge.personal {
+  background-color: #e6f7ff;
+  color: #0084ff;
+}
+
+.ownership-badge.family {
+  background-color: #e6f9e6;
+  color: #2e7d32;
+}
+
+.ownership-menu-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.convert-button {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.convert-button:hover {
+  background-color: #f5f5f5;
+}
+
+.convert-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ownership-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 5px;
+  background-color: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.ownership-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.ownership-option:hover {
+  background-color: #f5f7fb;
+}
+
+/* Family event styling in weekly calendar */
+.event-card.family-event {
+  border-left: 3px solid #2e7d32;
+  background-color: #e8f5e9;
+}
+
+.event-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.event-badge.family {
+  background-color: #e6f9e6;
+  color: #2e7d32;
+}
+
+/* Event preview family selection */
+.event-family-selection {
+  margin: 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.event-family-selection label {
+  font-size: 14px;
+  color: #555;
+}
+
+.event-family-selection select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+}
+
+.event-family-selection select:focus {
+  border-color: #0084ff;
+  box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.1);
+}

@@ -1,8 +1,9 @@
-// frontend/src/components/WeeklyCalendar.tsx
+// frontend/src/components/WeeklyCalendar.tsx - Updated for family support
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabaseClient';
 import * as dateUtils from '../utils/dateUtils';
 import EventConfirmation from './EventConfirmation';
+import { useFamily } from '../contexts/FamilyContext';
 import '../styles/WeeklyCalendar.css';
 
 interface CalendarEvent {
@@ -13,6 +14,8 @@ interface CalendarEvent {
   location?: string;
   is_recurring: boolean;
   recurrence_pattern?: any;
+  user_id?: string;
+  family_id?: string;
 }
 
 interface Confirmation {
@@ -33,6 +36,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   onEventSelect,
   initialConfirmation 
 }) => {
+  const { currentFamilyId } = useFamily();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(getStartOfWeek(new Date()));
@@ -156,17 +160,23 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         
         console.log(`Fetching events for week of ${currentWeekStart.toISOString()}`);
         
-        // Make sure we're not caching results by adding timestamp to the query
-        const cacheBreaker = new Date().getTime();
-        
-        // Fetch events for the current week
-        const { data, error } = await supabase
+        let query = supabase
           .from('events')
           .select('*')
-          .eq('user_id', user.id)
           .gte('start_time', currentWeekStart.toISOString())
           .lt('start_time', weekEndDate.toISOString())
           .order('start_time');
+        
+        // Filter based on current view (personal or family)
+        if (currentFamilyId) {
+          // Viewing family calendar
+          query = query.eq('family_id', currentFamilyId);
+        } else {
+          // Viewing personal calendar
+          query = query.eq('user_id', user.id);
+        }
+          
+        const { data, error } = await query;
           
         if (error) {
           throw error;
@@ -184,12 +194,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     
     fetchEvents();
     
-    // Important: This component should refetch data:
-    // 1. When the currentWeekStart changes (navigation)
-    // 2. When the component is mounted/remounted (via the key prop)
-    // The empty dependency array would only run on mount, but since
-    // we're using key={refreshKey} in parent, this is remounted
-  }, [currentWeekStart]);
+  }, [currentWeekStart, currentFamilyId]);
 
   // Get events for a specific day
   const getEventsForDay = (date: Date): CalendarEvent[] => {
@@ -219,7 +224,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     <div className="weekly-calendar">
       <div className="calendar-header">
         <h2>
-          {currentWeekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+          {currentFamilyId ? 'Family Calendar' : 'Personal Calendar'} - {currentWeekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
         </h2>
         <div className="calendar-controls">
           <button onClick={goToPreviousWeek} className="nav-button">
@@ -251,11 +256,14 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                 getEventsForDay(day).map(event => (
                   <div 
                     key={event.id} 
-                    className="event-card"
+                    className={`event-card ${event.family_id ? 'family-event' : ''}`}
                     onClick={() => handleEventClick(event)}
                   >
                     <div className="event-time">{getTimeRange(event)}</div>
-                    <div className="event-title">{event.title}</div>
+                    <div className="event-title">
+                      {event.family_id && <span className="event-badge family">Family</span>}
+                      {event.title}
+                    </div>
                     {event.location && (
                       <div className="event-location">
                         <span className="location-icon">📍</span>

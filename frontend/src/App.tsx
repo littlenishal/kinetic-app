@@ -5,9 +5,12 @@ import ChatInterface from './components/ChatInterface';
 import CalendarPage from './pages/CalendarPage';
 import AppHeader from './components/AppHeader';
 import Navigation from './components/Navigation';
+import FamilySelector from './components/FamilySelector';
+import { useFamily } from './contexts/FamilyContext';
 import './App.css';
 import './styles/AppHeader.css';
 import './styles/Navigation.css';
+import './styles/FamilySelector.css';
 
 // Define user type
 interface User {
@@ -15,11 +18,15 @@ interface User {
   email?: string;
 }
 
+// Main App component
 function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'chat' | 'calendar'>('chat');
+  
+  // Access the family context
+  const { currentFamilyId, setCurrentFamilyId } = useFamily();
 
   useEffect(() => {
     // Get current session and set up listener for auth changes
@@ -105,7 +112,14 @@ function App() {
         userEmail={user?.email}
         onSignIn={handleSignIn}
         onSignOut={handleSignOut}
-      />
+      >
+        {user && (
+          <FamilySelector 
+            currentFamilyId={currentFamilyId}
+            onFamilyChange={setCurrentFamilyId}
+          />
+        )}
+      </AppHeader>
       
       {user && (
         <Navigation 
@@ -133,6 +147,13 @@ function App() {
                 <div className="feature-text">
                   <h3>Chat-Based Calendar</h3>
                   <p>Create events by simply typing things like "Schedule soccer practice on Tuesday at 4pm"</p>
+                </div>
+              </div>
+              <div className="feature-item">
+                <div className="feature-icon">👨‍👩‍👧‍👦</div>
+                <div className="feature-text">
+                  <h3>Family Sharing</h3>
+                  <p>Share your calendar with family members so everyone stays in sync</p>
                 </div>
               </div>
               <div className="feature-item">

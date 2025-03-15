@@ -1,0 +1,105 @@
+/* frontend/src/styles/FamilySelector.css */
+
+.family-selector {
+    position: relative;
+    margin-left: 16px;
+  }
+  
+  .selector-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background-color: #f0f2f5;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .selector-button:hover {
+    background-color: #e4e6eb;
+  }
+  
+  .selector-icon {
+    font-size: 16px;
+  }
+  
+  .current-selection {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+  }
+  
+  .dropdown-arrow {
+    font-size: 10px;
+    color: #65676b;
+  }
+  
+  .family-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    width: 240px;
+    z-index: 100;
+    overflow: hidden;
+  }
+  
+  .family-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .family-option:hover {
+    background-color: #f0f2f5;
+  }
+  
+  .family-option.active {
+    background-color: #e6f2ff;
+    color: #0084ff;
+    font-weight: 500;
+  }
+  
+  .family-option.create {
+    color: #0084ff;
+    font-weight: 500;
+  }
+  
+  .option-icon {
+    font-size: 18px;
+  }
+  
+  .option-name {
+    font-size: 14px;
+  }
+  
+  .dropdown-divider {
+    height: 1px;
+    background-color: #e4e6eb;
+    margin: 4px 0;
+  }
+  
+  /* Responsive styles */
+  @media (max-width: 767px) {
+    .family-selector {
+      margin-left: 8px;
+    }
+    
+    .selector-button {
+      padding: 4px 8px;
+    }
+    
+    .current-selection {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
