@@ -6,7 +6,7 @@ import CalendarPage from './pages/CalendarPage';
 import AppHeader from './components/AppHeader';
 import Navigation from './components/Navigation';
 import FamilySelector from './components/FamilySelector';
-import { FamilyProvider, useFamily } from './contexts/FamilyContext';
+import { useFamily } from './contexts/FamilyContext';
 import './App.css';
 import './styles/AppHeader.css';
 import './styles/Navigation.css';
@@ -18,56 +18,15 @@ interface User {
   email?: string;
 }
 
-// Create a Family Context to manage active family state
-const FamilyContext = React.createContext<{
-  currentFamilyId: string | null;
-  setCurrentFamilyId: (id: string | null) => void;
-} | undefined>(undefined);
-
-// Family Provider component
-export const FamilyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentFamilyId, setCurrentFamilyId] = useState<string | null>(null);
-  
-  // Load last selected family from localStorage
-  useEffect(() => {
-    const savedFamilyId = localStorage.getItem('currentFamilyId');
-    if (savedFamilyId) {
-      setCurrentFamilyId(savedFamilyId);
-    }
-  }, []);
-  
-  // Save selected family to localStorage
-  const handleSetFamily = (id: string | null) => {
-    setCurrentFamilyId(id);
-    if (id) {
-      localStorage.setItem('currentFamilyId', id);
-    } else {
-      localStorage.removeItem('currentFamilyId');
-    }
-  };
-  
-  return (
-    <FamilyContext.Provider value={{ currentFamilyId, setCurrentFamilyId: handleSetFamily }}>
-      {children}
-    </FamilyContext.Provider>
-  );
-};
-
-// Hook to use the family context
-export const useFamily = () => {
-  const context = React.useContext(FamilyContext);
-  if (context === undefined) {
-    throw new Error('useFamily must be used within a FamilyProvider');
-  }
-  return context;
-};
-
 // Main App component
 function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<'chat' | 'calendar'>('chat');
+  
+  // Access the family context
+  const { currentFamilyId, setCurrentFamilyId } = useFamily();
 
   useEffect(() => {
     // Get current session and set up listener for auth changes
@@ -148,79 +107,77 @@ function App() {
   }
 
   return (
-    <FamilyProvider>
-      <div className="App">
-        <AppHeader 
-          userEmail={user?.email}
-          onSignIn={handleSignIn}
-          onSignOut={handleSignOut}
-        >
-          {user && (
-            <FamilySelector 
-              currentFamilyId={useFamily().currentFamilyId}
-              onFamilyChange={useFamily().setCurrentFamilyId}
-            />
-          )}
-        </AppHeader>
-        
+    <div className="App">
+      <AppHeader 
+        userEmail={user?.email}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
+      >
         {user && (
-          <Navigation 
-            currentView={currentView}
-            onViewChange={handleViewChange}
+          <FamilySelector 
+            currentFamilyId={currentFamilyId}
+            onFamilyChange={setCurrentFamilyId}
           />
         )}
-        
-        <main className={`App-main ${!user ? 'welcome-view' : ''}`}>
-          {user ? (
-            <>
-              {currentView === 'chat' && <ChatInterface />}
-              {currentView === 'calendar' && <CalendarPage />}
-            </>
-          ) : (
-            <div className="welcome-container">
-              <h2>Welcome to KINETIC</h2>
-              <p>
-                A chat-based family management app that helps busy families organize 
-                their lives through natural language interactions.
-              </p>
-              <div className="feature-list">
-                <div className="feature-item">
-                  <div className="feature-icon">💬</div>
-                  <div className="feature-text">
-                    <h3>Chat-Based Calendar</h3>
-                    <p>Create events by simply typing things like "Schedule soccer practice on Tuesday at 4pm"</p>
-                  </div>
-                </div>
-                <div className="feature-item">
-                  <div className="feature-icon">👨‍👩‍👧‍👦</div>
-                  <div className="feature-text">
-                    <h3>Family Sharing</h3>
-                    <p>Share your calendar with family members so everyone stays in sync</p>
-                  </div>
-                </div>
-                <div className="feature-item">
-                  <div className="feature-icon">📅</div>
-                  <div className="feature-text">
-                    <h3>Smart Calendar</h3>
-                    <p>Easily view, edit and manage all your family events in one place</p>
-                  </div>
-                </div>
-                <div className="feature-item">
-                  <div className="feature-icon">🔔</div>
-                  <div className="feature-text">
-                    <h3>Smart Notifications</h3>
-                    <p>Get daily and weekly schedule updates to stay on top of your family's activities</p>
-                  </div>
+      </AppHeader>
+      
+      {user && (
+        <Navigation 
+          currentView={currentView}
+          onViewChange={handleViewChange}
+        />
+      )}
+      
+      <main className={`App-main ${!user ? 'welcome-view' : ''}`}>
+        {user ? (
+          <>
+            {currentView === 'chat' && <ChatInterface />}
+            {currentView === 'calendar' && <CalendarPage />}
+          </>
+        ) : (
+          <div className="welcome-container">
+            <h2>Welcome to KINETIC</h2>
+            <p>
+              A chat-based family management app that helps busy families organize 
+              their lives through natural language interactions.
+            </p>
+            <div className="feature-list">
+              <div className="feature-item">
+                <div className="feature-icon">💬</div>
+                <div className="feature-text">
+                  <h3>Chat-Based Calendar</h3>
+                  <p>Create events by simply typing things like "Schedule soccer practice on Tuesday at 4pm"</p>
                 </div>
               </div>
-              <button className="sign-in-button large" onClick={handleSignIn}>
-                Sign In to Get Started
-              </button>
+              <div className="feature-item">
+                <div className="feature-icon">👨‍👩‍👧‍👦</div>
+                <div className="feature-text">
+                  <h3>Family Sharing</h3>
+                  <p>Share your calendar with family members so everyone stays in sync</p>
+                </div>
+              </div>
+              <div className="feature-item">
+                <div className="feature-icon">📅</div>
+                <div className="feature-text">
+                  <h3>Smart Calendar</h3>
+                  <p>Easily view, edit and manage all your family events in one place</p>
+                </div>
+              </div>
+              <div className="feature-item">
+                <div className="feature-icon">🔔</div>
+                <div className="feature-text">
+                  <h3>Smart Notifications</h3>
+                  <p>Get daily and weekly schedule updates to stay on top of your family's activities</p>
+                </div>
+              </div>
             </div>
-          )}
-        </main>
-      </div>
-    </FamilyProvider>
+            <button className="sign-in-button large" onClick={handleSignIn}>
+              Sign In to Get Started
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
 
