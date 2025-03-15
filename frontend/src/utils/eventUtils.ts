@@ -299,10 +299,12 @@ export const createEventPreviewFromApiData = (eventData: any): EventPreviewData 
 
 /**
  * Prepare event data from preview for database storage
+ * Updated to support family events
  */
 export const prepareEventForSaving = (
   eventPreview: EventPreviewData,
-  userId: string
+  userId: string,
+  familyId: string | null = null
 ): any => {
   // Create a proper date object from the preview data
   const eventDate = eventPreview.date;
@@ -374,9 +376,10 @@ export const prepareEventForSaving = (
   // Determine if we're updating an existing event or creating a new one
   const isUpdating = !!eventPreview.id;
   
-  // Define the event data type with an optional source property
+  // Create the base event data, setting ownership based on selected family
   interface EventData {
-    user_id: string;
+    user_id: string | null;
+    family_id: string | null;
     title: string;
     description: string;
     start_time: string;
@@ -388,9 +391,9 @@ export const prepareEventForSaving = (
     source?: string;
   }
   
-  // Create the base event data
   const eventData: EventData = {
-    user_id: userId,
+    user_id: familyId ? null : userId,   // For personal events
+    family_id: familyId,                 // For family events
     title: eventPreview.title,
     description: '', // Add a description field if needed
     start_time: startTime.toISOString(),
@@ -410,4 +413,4 @@ export const prepareEventForSaving = (
     data: eventData,
     isUpdating
   };
-};  
+}; 

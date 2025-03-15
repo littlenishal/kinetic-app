@@ -1,7 +1,9 @@
-// frontend/src/components/EventDetails.tsx
+// frontend/src/components/EventDetails.tsx - Updated with family support
 import React, { useState } from 'react';
 import * as dateUtils from '../utils/dateUtils';
 import { supabase } from '../services/supabaseClient';
+import { convertEventOwnership } from '../services/eventService';
+import { useFamily } from '../contexts/FamilyContext';
 import EventEditForm from './EventEditForm';
 import '../styles/EventDetails.css';
 
@@ -15,6 +17,12 @@ interface EventDetailsProps {
     description?: string;
     is_recurring: boolean;
     recurrence_pattern?: any;
+    user_id?: string;
+    family_id?: string;
+    family?: {
+      id: string;
+      name: string;
+    };
   };
   onClose: () => void;
   onDelete: () => void;
@@ -27,11 +35,18 @@ const EventDetails: React.FC<EventDetailsProps> = ({
   onDelete,
   onEdit 
 }) => {
+  const { families, currentFamilyId, setCurrentFamilyId } = useFamily();
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
+  const [showOwnershipMenu, setShowOwnershipMenu] = useState(false);
   
   const startDate = new Date(event.start_time);
   const endDate = event.end_time ? new Date(event.end_time) : null;
+  
+  // Determine if this is a personal or family event
+  const isPersonalEvent = !!event.user_id;
+  const isFamilyEvent = !!event.family_id;
   
   const handleDelete = async () => {
     if (!window.confirm('Are you sure you want to delete this event?')) {
@@ -64,6 +79,75 @@ const EventDetails: React.FC<EventDetailsProps> = ({
     setIsEditing(false);
   };
   
+  const handleConvertToFamily = async (familyId: string) => {
+    setIsConverting(true);
+    setShowOwnershipMenu(false);
+    
+    try {
+      const result = await convertEventOwnership(event.id, familyId);
+      
+      if (result.success) {
+        // Update the current family context if needed
+        if (familyId !== currentFamilyId) {
+          setCurrentFamilyId(familyId);
+        }
+        
+        // Close the details modal and refresh the calendar
+        if (onEdit) {
+          const updatedEvent = {
+            ...event,
+            user_id: null,
+            family_id: familyId
+          };
+          onEdit(updatedEvent);
+        } else {
+          onClose();
+        }
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error converting event:', error);
+      alert('Failed to convert event. Please try again.');
+      setIsConverting(false);
+    }
+  };
+  
+  const handleConvertToPersonal = async () => {
+    setIsConverting(true);
+    setShowOwnershipMenu(false);
+    
+    try {
+      const result = await convertEventOwnership(event.id, null);
+      
+      if (result.success) {
+        // Update the current family context if needed
+        if (currentFamilyId !== null) {
+          setCurrentFamilyId(null);
+        }
+        
+        // Close the details modal and refresh the calendar
+        if (onEdit) {
+          const { data: { user } } = await supabase.auth.getUser();
+          const updatedEvent = {
+            ...event,
+            user_id: user?.id,
+            family_id: null
+          };
+          onEdit(updatedEvent);
+        } else {
+          onClose();
+        }
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error converting event:', error);
+      alert('Failed to convert event. Please try again.');
+      setIsConverting(false);
+    }
+  };
+  
   const handleSaveEdit = async (updatedEvent: any) => {
     try {
       // Get current user for RLS
@@ -75,7 +159,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({
       
       // Include all necessary fields for update
       const updateData = {
-        user_id: user.id, // Include user_id for RLS
+        user_id: isFamilyEvent ? null : user.id, // Maintain ownership type
+        family_id: event.family_id,
         title: updatedEvent.title,
         start_time: updatedEvent.start_time,
         end_time: updatedEvent.end_time,
@@ -165,6 +250,59 @@ const EventDetails: React.FC<EventDetailsProps> = ({
         
         <h2 className="event-title">{event.title}</h2>
         
+        <div className="event-ownership">
+          {isFamilyEvent ? (
+            <span className="ownership-badge family">
+              {event.family?.name || 'Family'} Calendar
+            </span>
+          ) : (
+            <span className="ownership-badge personal">
+              Personal Calendar
+            </span>
+          )}
+          
+          {/* Show convert option if there are families available */}
+          {families.length > 0 && (
+            <div className="ownership-menu-container">
+              <button 
+                className="convert-button"
+                onClick={() => setShowOwnershipMenu(!showOwnershipMenu)}
+                disabled={isConverting}
+              >
+                {isConverting ? 'Converting...' : 'Move To →'}
+              </button>
+              
+              {showOwnershipMenu && (
+                <div className="ownership-menu">
+                  {/* Personal option */}
+                  {!isPersonalEvent && (
+                    <button 
+                      className="ownership-option"
+                      onClick={handleConvertToPersonal}
+                    >
+                      Personal Calendar
+                    </button>
+                  )}
+                  
+                  {/* Family options */}
+                  {families.map(family => (
+                    // Skip the current family if this is already a family event in this family
+                    (isFamilyEvent && family.id === event.family_id) ? null : (
+                      <button 
+                        key={family.id}
+                        className="ownership-option"
+                        onClick={() => handleConvertToFamily(family.id)}
+                      >
+                        {family.name} Family
+                      </button>
+                    )
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        
         <div className="event-info-section">
           <div className="event-info-item">
             <div className="info-icon">🗓️</div>
@@ -219,14 +357,14 @@ const EventDetails: React.FC<EventDetailsProps> = ({
           <button 
             className="edit-button" 
             onClick={handleEditClick}
-            disabled={isDeleting}
+            disabled={isDeleting || isConverting}
           >
             Edit
           </button>
           <button 
             className="delete-button" 
             onClick={handleDelete}
-            disabled={isDeleting}
+            disabled={isDeleting || isConverting}
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
           </button>

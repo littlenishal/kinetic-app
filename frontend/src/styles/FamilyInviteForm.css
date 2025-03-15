@@ -1,0 +1,130 @@
+/* frontend/src/styles/FamilyInviteForm.css */
+
+.family-invite-form {
+    background-color: #fff;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 500px;
+  }
+  
+  .family-invite-form h2 {
+    margin: 0 0 16px;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .family-invite-form .error-message {
+    background-color: #ffebee;
+    color: #d32f2f;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  
+  .family-invite-form .form-group {
+    margin-bottom: 16px;
+  }
+  
+  .family-invite-form label {
+    display: block;
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 8px;
+  }
+  
+  .family-invite-form input,
+  .family-invite-form textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  
+  .family-invite-form input:focus,
+  .family-invite-form textarea:focus {
+    border-color: #0084ff;
+    box-shadow: 0 0 0 2px rgba(0, 132, 255, 0.1);
+  }
+  
+  .family-invite-form .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  
+  .family-invite-form .cancel-button,
+  .family-invite-form .send-button,
+  .family-invite-form .close-button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .family-invite-form .cancel-button {
+    background-color: #f0f2f5;
+    color: #666;
+  }
+  
+  .family-invite-form .cancel-button:hover {
+    background-color: #e4e6eb;
+  }
+  
+  .family-invite-form .send-button {
+    background-color: #0084ff;
+    color: white;
+  }
+  
+  .family-invite-form .send-button:hover {
+    background-color: #0077e6;
+  }
+  
+  .family-invite-form .close-button {
+    background-color: #0084ff;
+    color: white;
+    margin-top: 16px;
+  }
+  
+  .family-invite-form .close-button:hover {
+    background-color: #0077e6;
+  }
+  
+  .family-invite-form .cancel-button:disabled,
+  .family-invite-form .send-button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  .family-invite-form .invite-success {
+    text-align: center;
+    padding: 20px 0;
+  }
+  
+  .family-invite-form .success-icon {
+    background-color: #4caf50;
+    color: white;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin: 0 auto 16px;
+  }
+  
+  .family-invite-form .success-note {
+    color: #666;
+    font-size: 14px;
+    margin-top: 8px;
+  }

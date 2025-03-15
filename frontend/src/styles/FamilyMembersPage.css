@@ -1,0 +1,273 @@
+/* frontend/src/styles/FamilyMembersPage.css */
+
+.family-members-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 24px 16px;
+  }
+  
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  
+  .page-header h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+  }
+  
+  .header-actions {
+    display: flex;
+    gap: 12px;
+  }
+  
+  .invite-button {
+    background-color: #0084ff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .invite-button:hover {
+    background-color: #0077e6;
+  }
+  
+  .members-container {
+    background-color: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 24px;
+  }
+  
+  .members-container h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 16px;
+  }
+  
+  .no-members {
+    color: #666;
+    font-style: italic;
+  }
+  
+  .members-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  
+  .member-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+  }
+  
+  .member-item:last-child {
+    border-bottom: none;
+  }
+  
+  .member-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #e4e6eb;
+    color: #333;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 500;
+  }
+  
+  .member-info {
+    flex: 1;
+  }
+  
+  .member-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .role-badge {
+    background-color: #e4e6eb;
+    color: #666;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: normal;
+  }
+  
+  .member-since {
+    font-size: 13px;
+    color: #666;
+    margin-top: 4px;
+  }
+  
+  .family-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+  }
+  
+  .leave-button,
+  .delete-button {
+    background-color: #fff0f0;
+    color: #e53935;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .leave-button:hover,
+  .delete-button:hover {
+    background-color: #ffebee;
+  }
+  
+  /* Modals */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+  }
+  
+  .modal-content {
+    width: 100%;
+    max-width: 500px;
+  }
+  
+  .confirm-modal {
+    background-color: white;
+    border-radius: 8px;
+    padding: 24px;
+    width: 100%;
+    max-width: 450px;
+  }
+  
+  .confirm-modal h2 {
+    margin: 0 0 16px;
+    font-size: 20px;
+    color: #333;
+  }
+  
+  .confirm-modal p {
+    color: #666;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+  
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+  
+  .confirm-actions button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+  
+  .cancel-button {
+    background-color: #f0f2f5;
+    color: #666;
+  }
+  
+  .cancel-button:hover {
+    background-color: #e4e6eb;
+  }
+  
+  .confirm-button {
+    color: white;
+  }
+  
+  .confirm-button.leave {
+    background-color: #f44336;
+  }
+  
+  .confirm-button.leave:hover {
+    background-color: #d32f2f;
+  }
+  
+  .confirm-button.delete {
+    background-color: #f44336;
+  }
+  
+  .confirm-button.delete:hover {
+    background-color: #d32f2f;
+  }
+  
+  /* Loading and error states */
+  .loading-spinner {
+    margin: 40px auto;
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #0084ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .error-container {
+    text-align: center;
+    padding: 40px 20px;
+  }
+  
+  .error-message {
+    color: #e53935;
+    margin-bottom: 16px;
+  }
+  
+  /* Responsive styles */
+  @media (max-width: 480px) {
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .header-actions {
+      width: 100%;
+    }
+    
+    .invite-button {
+      width: 100%;
+    }
+  }
