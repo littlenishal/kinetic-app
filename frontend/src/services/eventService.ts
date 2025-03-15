@@ -1,6 +1,7 @@
 // frontend/src/services/eventService.ts - Updated for family support
 import { supabase } from './supabaseClient';
 import { EventPreviewData } from '../utils/eventUtils';
+import { Family } from '../contexts/FamilyContext';
 
 /**
  * Create a new event in the database
@@ -49,29 +50,38 @@ export const updateEvent = async (eventId: string, eventData: any, familyId: str
     // Remove id from the update data if present
     const { id, user_id, family_id, ...updateData } = eventData;
     
-    // Prepare the update query
-    let query = supabase
-      .from('events')
-      .update({
-        ...updateData,
-        user_id: familyId ? null : user.id,   // Update ownership if needed
-        family_id: familyId,                  // Update family association
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', eventId)
-      .select('*')
-      .single();
+    // Prepare the update data
+    const dataToUpdate = {
+      ...updateData,
+      user_id: familyId ? null : user.id,   // Update ownership if needed
+      family_id: familyId,                  // Update family association
+      updated_at: new Date().toISOString()
+    };
     
-    // Apply appropriate filters based on current mode
+    let query;
+    
+    // Build query based on ownership type
     if (familyId) {
-      // If editing a family event, ensure it belongs to this family
-      query = query.eq('family_id', familyId);
+      // If editing a family event
+      query = await supabase
+        .from('events')
+        .update(dataToUpdate)
+        .eq('id', eventId)
+        .eq('family_id', familyId)
+        .select('*')
+        .single();
     } else {
-      // If editing a personal event, ensure it belongs to this user
-      query = query.eq('user_id', user.id);
+      // If editing a personal event
+      query = await supabase
+        .from('events')
+        .update(dataToUpdate)
+        .eq('id', eventId)
+        .eq('user_id', user.id)
+        .select('*')
+        .single();
     }
-      
-    const { data, error } = await query;
+    
+    const { data, error } = query;
       
     if (error) throw error;
     return { success: true, data };
@@ -95,21 +105,25 @@ export const deleteEvent = async (eventId: string, familyId: string | null = nul
     }
     
     // Build delete query with appropriate filters
-    let query = supabase
-      .from('events')
-      .delete()
-      .eq('id', eventId);
+    let query;
     
-    // Apply appropriate filters based on current mode
     if (familyId) {
       // If deleting a family event, ensure it belongs to this family
-      query = query.eq('family_id', familyId);
+      query = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId)
+        .eq('family_id', familyId);
     } else {
       // If deleting a personal event, ensure it belongs to this user
-      query = query.eq('user_id', user.id);
+      query = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId)
+        .eq('user_id', user.id);
     }
       
-    const { error } = await query;
+    const { error } = query;
       
     if (error) throw error;
     return { success: true };
@@ -132,6 +146,13 @@ export const fetchEventById = async (eventId: string) => {
       throw new Error('Authentication required');
     }
     
+    // Create a SQL query for the family IDs the user belongs to
+    const userFamiliesQuery = `
+      SELECT family_id FROM family_members 
+      WHERE user_id = '${user.id}' 
+      AND invitation_accepted = true
+    `;
+    
     // Query for the event - either personal (user_id) or family (family_id in user's families)
     const { data, error } = await supabase
       .from('events')
@@ -143,7 +164,7 @@ export const fetchEventById = async (eventId: string) => {
         )
       `)
       .eq('id', eventId)
-      .or(`user_id.eq.${user.id},family_id.in.(${getFamilyIdsQuery()})`)
+      .or(`user_id.eq.${user.id},family_id.in.(${userFamiliesQuery})`)
       .single();
       
     if (error) throw error;
@@ -212,12 +233,18 @@ export const convertEventOwnership = async (
       throw new Error('Authentication required');
     }
     
-    // First fetch the event to verify ownership
+    // First, verify the user can access this event
+    const userFamiliesQuery = `
+      SELECT family_id FROM family_members 
+      WHERE user_id = '${user.id}' 
+      AND invitation_accepted = true
+    `;
+    
     const { data: event, error: fetchError } = await supabase
       .from('events')
       .select('*')
       .eq('id', eventId)
-      .or(`user_id.eq.${user.id},family_id.in.(${getFamilyIdsQuery()})`)
+      .or(`user_id.eq.${user.id},family_id.in.(${userFamiliesQuery})`)
       .single();
       
     if (fetchError || !event) {
