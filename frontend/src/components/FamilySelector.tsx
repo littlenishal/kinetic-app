@@ -8,13 +8,8 @@ interface Family {
   name: string;
 }
 
-interface FamilyMemberData {
-  family_id: string;
-  families: {
-    id: string;
-    name: string;
-  };
-}
+// Define a type without specifying the exact structure for flexibility
+type SupabaseData = any;
 
 interface FamilySelectorProps {
   currentFamilyId: string | null;
@@ -61,12 +56,19 @@ const FamilySelector: React.FC<FamilySelectorProps> = ({
         
         // Safely process the data
         if (data && Array.isArray(data)) {
-          data.forEach((item: FamilyMemberData) => {
-            if (item.families && typeof item.families === 'object') {
-              userFamilies.push({
-                id: item.families.id,
-                name: item.families.name
-              });
+          data.forEach((item: SupabaseData) => {
+            if (item.families) {
+              // Handle case where families could be an object or an array with one object
+              const familyData = Array.isArray(item.families) 
+                ? item.families[0] 
+                : item.families;
+                
+              if (familyData && familyData.id && familyData.name) {
+                userFamilies.push({
+                  id: familyData.id,
+                  name: familyData.name
+                });
+              }
             }
           });
         }
