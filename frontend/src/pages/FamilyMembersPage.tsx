@@ -1,8 +1,10 @@
 // frontend/src/pages/FamilyMembersPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFamilyMembers, leaveFamily, deleteFamily, Family, FamilyMember } from '../services/familyService';
+import { getFamilyMembers, leaveFamily, deleteFamily, FamilyMember } from '../services/familyService';
+import { Family } from '../contexts/FamilyContext'; // Import Family from context instead
 import FamilyInviteForm from '../components/FamilyInviteForm';
+import { supabase } from '../services/supabaseClient';
 import '../styles/FamilyMembersPage.css';
 
 const FamilyMembersPage: React.FC = () => {
