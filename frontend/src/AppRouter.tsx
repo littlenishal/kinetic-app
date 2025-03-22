@@ -6,13 +6,14 @@ import AuthGuard from './components/AuthGuard';
 import FamiliesPage from './pages/FamiliesPage';
 import FamilyMembersPage from './pages/FamilyMembersPage';
 import { FamilyProvider } from './contexts/FamilyContext';
+import Layout from './components/Layout';
 
 const AppRouter: React.FC = () => {
   return (
     <Router>
       <FamilyProvider>
         <Routes>
-          {/* Main app routes */}
+          {/* Main app route */}
           <Route path="/" element={<App />} />
           
           {/* Family management routes (protected) */}
@@ -20,7 +21,9 @@ const AppRouter: React.FC = () => {
             path="/families" 
             element={
               <AuthGuard>
-                <FamiliesPage />
+                <Layout>
+                  <FamiliesPage />
+                </Layout>
               </AuthGuard>
             } 
           />
@@ -29,7 +32,9 @@ const AppRouter: React.FC = () => {
             path="/families/:familyId/members" 
             element={
               <AuthGuard>
-                <FamilyMembersPage />
+                <Layout>
+                  <FamilyMembersPage />
+                </Layout>
               </AuthGuard>
             } 
           />
