@@ -137,6 +137,15 @@ const ChatInterface: React.FC = () => {
     await addAssistantMessage("I've cancelled the event action. Is there something else you'd like to do?");
   };
 
+  // Debug function to log message distribution
+  useEffect(() => {
+    if (messages.length > 0) {
+      const userMessages = messages.filter(m => m.role === 'user').length;
+      const assistantMessages = messages.filter(m => m.role === 'assistant').length;
+      console.log(`ChatInterface - Rendering ${messages.length} messages - User: ${userMessages}, Assistant: ${assistantMessages}`);
+    }
+  }, [messages]);
+
   // Render message bubbles
   const renderMessage = (message: Message) => {
     const isUser = message.role === 'user';

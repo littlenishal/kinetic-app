@@ -17,8 +17,14 @@ export default function useConversation() {
         
         const { messages: loadedMessages, id } = await chatService.fetchConversation();
         
-        if (loadedMessages.length > 0) {
+        if (loadedMessages && loadedMessages.length > 0) {
           console.log(`Loaded ${loadedMessages.length} messages from conversation ${id}`);
+          
+          // Log a sample of the loaded messages
+          const userMessages = loadedMessages.filter(m => m.role === 'user').length;
+          const assistantMessages = loadedMessages.filter(m => m.role === 'assistant').length;
+          console.log(`Loaded message distribution - User: ${userMessages}, Assistant: ${assistantMessages}`);
+          
           setMessages(loadedMessages);
           setConversationId(id);
         } else {

@@ -38,6 +38,7 @@ export const processMessage = async (
     }));
     
     console.log(`Sending ${recentHistory.length} messages to chat processing endpoint`);
+    console.log('Conversation history roles:', recentHistory.map(msg => msg.role).join(', '));
     
     // Call Supabase Edge Function with proper authentication
     const response = await fetch(endpoint, {
@@ -95,6 +96,11 @@ export const saveConversation = async (
     const processedMessages = processMessageTimestamps(messages);
     
     console.log(`Saving conversation with ${processedMessages.length} messages. Conversation ID: ${conversationId || 'new'}`);
+    
+    // Log messages distribution for debugging
+    const userMessages = processedMessages.filter(m => m.role === 'user').length;
+    const assistantMessages = processedMessages.filter(m => m.role === 'assistant').length;
+    console.log(`Message distribution - User: ${userMessages}, Assistant: ${assistantMessages}`);
     
     // Log some sample messages for debugging
     if (processedMessages.length > 0) {
@@ -201,7 +207,14 @@ export const fetchConversation = async (): Promise<{ messages: Message[]; id: st
       
       console.log(`User messages: ${userMessages}, Assistant messages: ${assistantMessages}`);
       
-      return { messages: parsedMessages, id: data[0].id };
+      // Ensure parsed messages are sorted by timestamp to maintain conversation flow
+      const sortedMessages = [...parsedMessages].sort((a, b) => {
+        const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+        const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+        return timeA - timeB;
+      });
+      
+      return { messages: sortedMessages, id: data[0].id };
     }
     
     console.log("No conversation found or empty conversation");
