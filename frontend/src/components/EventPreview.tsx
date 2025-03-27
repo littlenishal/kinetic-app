@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import * as dateUtils from '../utils/dateUtils';
 import { useFamily } from '../contexts/FamilyContext';
+import '../styles/EventPreview.css';
 
 interface EventPreviewProps {
   event: {
@@ -19,7 +20,6 @@ interface EventPreviewProps {
 const EventPreview: React.FC<EventPreviewProps> = ({ event, onConfirm, onCancel }) => {
   const { families, currentFamilyId, setCurrentFamilyId } = useFamily();
   const [selectedFamily, setSelectedFamily] = useState<string | null>(currentFamilyId);
-  const [showFamilySelect, setShowFamilySelect] = useState(false);
   
   // Parse the date for display
   const eventDate = event.date instanceof Date ? event.date : new Date(event.date);

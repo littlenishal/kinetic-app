@@ -186,3 +186,10 @@
     border-radius: 5px;
     cursor: pointer;
   }
+  
+  .event-preview-wrapper {
+    width: 100%;
+    margin: 10px 0;
+    display: flex;
+    justify-content: center;
+  }
