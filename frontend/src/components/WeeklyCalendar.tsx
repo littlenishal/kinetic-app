@@ -1,5 +1,5 @@
-// frontend/src/components/WeeklyCalendar.tsx - Updated for family support
-import React, { useState, useEffect, useRef } from 'react';
+// frontend/src/components/WeeklyCalendar.tsx
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../services/supabaseClient';
 import * as dateUtils from '../utils/dateUtils';
 import EventConfirmation from './EventConfirmation';
@@ -46,6 +46,10 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     type: initialConfirmation?.type || 'created',
     eventTitle: initialConfirmation?.eventTitle || ''
   });
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(window.innerWidth > 768 ? 'grid' : 'list');
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   // Function to get start of the week (Sunday)
   function getStartOfWeek(date: Date): Date {
@@ -74,6 +78,50 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     
     return `${date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}`;
   };
+
+  // Responsive layout handler
+  useEffect(() => {
+    const handleResize = () => {
+      setViewMode(window.innerWidth > 768 ? 'grid' : 'list');
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  // Touch swipe navigation
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setIsDragging(true);
+    setStartX(e.touches[0].clientX);
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+  }, [isDragging]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!isDragging) return;
+    
+    const endX = e.changedTouches[0].clientX;
+    const diffX = endX - startX;
+    
+    // Threshold for swipe detection
+    if (Math.abs(diffX) > 50) {
+      if (diffX > 0) {
+        // Swipe right - go to previous week
+        goToPreviousWeek();
+      } else {
+        // Swipe left - go to next week
+        goToNextWeek();
+      }
+    }
+    
+    setIsDragging(false);
+  }, [isDragging, startX]);
 
   // Navigate to previous week
   const goToPreviousWeek = () => {
@@ -126,9 +174,20 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   };
 
   // Select event handler
-  const handleEventClick = (event: CalendarEvent) => {
+  const handleEventClick = (event: CalendarEvent, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event bubbling
     if (onEventSelect) {
       onEventSelect(event);
+    }
+  };
+
+  // Keyboard event handling for accessibility
+  const handleEventKeyDown = (event: CalendarEvent, e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (onEventSelect) {
+        onEventSelect(event);
+      }
     }
   };
 
@@ -139,7 +198,6 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   useEffect(() => {
     // Increment mount count
     componentMountCount.current += 1;
-    console.log(`WeeklyCalendar mounted/updated (count: ${componentMountCount.current})`);
     
     const fetchEvents = async () => {
       setLoading(true);
@@ -157,8 +215,6 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
         // Calculate week end date
         const weekEndDate = new Date(currentWeekStart);
         weekEndDate.setDate(weekEndDate.getDate() + 7);
-        
-        console.log(`Fetching events for week of ${currentWeekStart.toISOString()}`);
         
         let query = supabase
           .from('events')
@@ -182,7 +238,6 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
           throw error;
         }
         
-        console.log(`Retrieved ${data?.length || 0} events`);
         setEvents(data || []);
       } catch (error) {
         console.error('Error fetching events:', error);
@@ -220,72 +275,168 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     );
   };
 
+  // Render a single event card
+  const renderEventCard = (event: CalendarEvent, includeDate = false) => (
+    <div 
+      key={event.id} 
+      className={`event-card ${event.family_id ? 'family-event' : ''}`}
+      onClick={(e) => handleEventClick(event, e)}
+      onKeyDown={(e) => handleEventKeyDown(event, e)}
+      tabIndex={0}
+      role="button"
+      aria-label={`${event.title} at ${getTimeRange(event)}${event.location ? ` at ${event.location}` : ''}`}
+    >
+      {includeDate && (
+        <div className="event-date">
+          {dateUtils.formatDate(new Date(event.start_time))}
+        </div>
+      )}
+      <div className="event-time">{getTimeRange(event)}</div>
+      <div className="event-title">
+        {event.family_id && <span className="event-badge family">Family</span>}
+        {event.title}
+      </div>
+      {event.location && (
+        <div className="event-location">
+          <span className="location-icon" aria-hidden="true">📍</span>
+          {formatLocation(event.location)}
+        </div>
+      )}
+      {event.is_recurring && (
+        <div className="event-recurring">
+          <span className="recurring-icon" aria-hidden="true">🔄</span>
+          <span className="sr-only">Recurring event</span>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render calendar in grid mode
+  const renderGridView = () => (
+    <div 
+      className="calendar-grid" 
+      role="grid" 
+      aria-label="Weekly calendar"
+      ref={calendarRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {weekDays.map((day, index) => (
+        <div 
+          key={index} 
+          className={`calendar-day ${isToday(day) ? 'today' : ''}`}
+          role="gridcell"
+          aria-label={formatDayHeader(day)}
+        >
+          <div className="day-header">{formatDayHeader(day)}</div>
+          
+          <div className="day-events">
+            {loading ? (
+              <div className="loading-events">Loading...</div>
+            ) : (
+              getEventsForDay(day).map(event => renderEventCard(event))
+            )}
+            
+            {!loading && getEventsForDay(day).length === 0 && (
+              <div className="no-events">No events</div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // Render calendar in list mode
+  const renderListView = () => (
+    <div className="calendar-list" role="list" aria-label="Weekly events">
+      {loading ? (
+        <div className="loading-events">Loading events...</div>
+      ) : (
+        weekDays.map((day, index) => {
+          const dayEvents = getEventsForDay(day);
+          
+          return (
+            <div 
+              key={index} 
+              className={`calendar-day-list ${isToday(day) ? 'today' : ''}`}
+              role="listitem"
+            >
+              <div className="day-header-list">{formatDayHeader(day)}</div>
+              
+              <div className="day-events-list">
+                {dayEvents.length > 0 ? (
+                  dayEvents.map(event => renderEventCard(event))
+                ) : (
+                  <div className="no-events">No events</div>
+                )}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
   return (
-    <div className="weekly-calendar">
+    <div className="weekly-calendar" aria-busy={loading}>
       <div className="calendar-header">
         <h2>
-          {currentFamilyId ? 'Family Calendar' : 'Personal Calendar'} - {currentWeekStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+          Week of {currentWeekStart.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
         </h2>
         <div className="calendar-controls">
-          <button onClick={goToPreviousWeek} className="nav-button">
-            <span>←</span>
+          <button 
+            onClick={goToPreviousWeek} 
+            className="nav-button"
+            aria-label="Previous week"
+          >
+            <span aria-hidden="true">←</span>
           </button>
-          <button onClick={goToToday} className="today-button">
+          <button 
+            onClick={goToToday} 
+            className="today-button"
+            aria-label="Go to current week"
+          >
             Today
           </button>
-          <button onClick={goToNextWeek} className="nav-button">
-            <span>→</span>
+          <button 
+            onClick={goToNextWeek} 
+            className="nav-button"
+            aria-label="Next week"
+          >
+            <span aria-hidden="true">→</span>
           </button>
         </div>
       </div>
       
-      {error && <div className="error-message">{error}</div>}
-      
-      <div className="calendar-grid">
-        {weekDays.map((day, index) => (
-          <div 
-            key={index} 
-            className={`calendar-day ${isToday(day) ? 'today' : ''}`}
-          >
-            <div className="day-header">{formatDayHeader(day)}</div>
-            
-            <div className="day-events">
-              {loading ? (
-                <div className="loading-events">Loading...</div>
-              ) : (
-                getEventsForDay(day).map(event => (
-                  <div 
-                    key={event.id} 
-                    className={`event-card ${event.family_id ? 'family-event' : ''}`}
-                    onClick={() => handleEventClick(event)}
-                  >
-                    <div className="event-time">{getTimeRange(event)}</div>
-                    <div className="event-title">
-                      {event.family_id && <span className="event-badge family">Family</span>}
-                      {event.title}
-                    </div>
-                    {event.location && (
-                      <div className="event-location">
-                        <span className="location-icon">📍</span>
-                        {formatLocation(event.location)}
-                      </div>
-                    )}
-                    {event.is_recurring && (
-                      <div className="event-recurring">
-                        <span className="recurring-icon">🔄</span>
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-              
-              {!loading && getEventsForDay(day).length === 0 && (
-                <div className="no-events">No events</div>
-              )}
-            </div>
-          </div>
-        ))}
+      <div className="view-toggle-container">
+        <button 
+          className={`view-toggle-button ${viewMode === 'grid' ? 'active' : ''}`}
+          onClick={() => setViewMode('grid')}
+          aria-pressed={viewMode === 'grid'}
+          aria-label="Grid view"
+        >
+          <span className="view-icon grid-icon" aria-hidden="true">□□</span>
+          <span className="sr-only">Grid view</span>
+        </button>
+        <button 
+          className={`view-toggle-button ${viewMode === 'list' ? 'active' : ''}`}
+          onClick={() => setViewMode('list')}
+          aria-pressed={viewMode === 'list'}
+          aria-label="List view"
+        >
+          <span className="view-icon list-icon" aria-hidden="true">≡</span>
+          <span className="sr-only">List view</span>
+        </button>
       </div>
+      
+      {error && (
+        <div className="error-message" role="alert">
+          {error}
+        </div>
+      )}
+      
+      {viewMode === 'grid' ? renderGridView() : renderListView()}
       
       {/* Confirmation toast */}
       {confirmation.show && (
@@ -295,6 +446,11 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
           onDismiss={dismissConfirmation}
         />
       )}
+      
+      {/* Touch navigation hint */}
+      <div className="swipe-hint">
+        <span aria-hidden="true">← Swipe to navigate →</span>
+      </div>
     </div>
   );
 };
