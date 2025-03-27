@@ -95,6 +95,10 @@ Deno.serve(async (req) => {
         role: msg.role,
         content: msg.content,
       }));
+      
+      // Log what we're sending to ensure we have both user and assistant messages
+      console.log(`Processing ${conversationContext.length} messages in conversation history`);
+      console.log('Message roles:', conversationContext.map(msg => msg.role).join(', '));
     }
     
     // Build system prompt with explicit instructions
