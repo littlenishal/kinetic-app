@@ -97,10 +97,16 @@ export const saveConversation = async (
     
     console.log(`Saving conversation with ${processedMessages.length} messages. Conversation ID: ${conversationId || 'new'}`);
     
-    // Log messages distribution for debugging
+    // Log detailed message info for debugging
     const userMessages = processedMessages.filter(m => m.role === 'user').length;
     const assistantMessages = processedMessages.filter(m => m.role === 'assistant').length;
     console.log(`Message distribution - User: ${userMessages}, Assistant: ${assistantMessages}`);
+    
+    // Log the complete conversation being saved
+    console.log('FULL CONVERSATION BEING SAVED:');
+    processedMessages.forEach((msg, idx) => {
+      console.log(`[${idx}][${msg.role}]: ${msg.content.substring(0, 50)}${msg.content.length > 50 ? '...' : ''}`);
+    });
     
     // Log some sample messages for debugging
     if (processedMessages.length > 0) {
@@ -114,10 +120,20 @@ export const saveConversation = async (
     
     // If we have a conversation ID, update that conversation
     if (conversationId) {
+      // Debug the exact payload we're sending to Supabase
+      console.log('Update payload for Supabase:', JSON.stringify({
+        messages: processedMessages,
+        updated_at: new Date().toISOString()
+      }));
+      
+      // Convert the array to a properly formatted JSONB array
+      // For PostgreSQL JSONB[], each message needs to be a separate array item
+      const formattedMessages = processedMessages.map(msg => JSON.stringify(msg));
+      
       const { error } = await supabase
         .from('conversations')
         .update({
-          messages: processedMessages,
+          messages: formattedMessages,
           updated_at: new Date().toISOString()
         })
         .eq('id', conversationId)
@@ -133,11 +149,23 @@ export const saveConversation = async (
     } 
     // Otherwise create a new conversation
     else {
+      // Debug the exact payload we're sending to Supabase
+      console.log('Insert payload for Supabase:', JSON.stringify({
+        user_id: user.id,
+        messages: processedMessages,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+      
+      // Convert the array to a properly formatted JSONB array
+      // For PostgreSQL JSONB[], each message needs to be a separate array item
+      const formattedMessages = processedMessages.map(msg => JSON.stringify(msg));
+      
       const { data, error } = await supabase
         .from('conversations')
         .insert({
           user_id: user.id,
-          messages: processedMessages,
+          messages: formattedMessages,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
@@ -185,27 +213,76 @@ export const fetchConversation = async (): Promise<{ messages: Message[]; id: st
       return { messages: [], id: null };
     }
     
-    if (data && data.length > 0 && Array.isArray(data[0].messages)) {
-      console.log(`Found conversation ${data[0].id} with ${data[0].messages.length} messages`);
+    if (data && data.length > 0) {
+      console.log(`Found conversation ${data[0].id}`);
+      
+      // Ensure messages array exists and is valid
+      if (!data[0].messages || !Array.isArray(data[0].messages)) {
+        console.error('Invalid messages array in conversation:', data[0]);
+        return { messages: [], id: data[0].id };
+      }
+      
+      console.log(`Conversation has ${data[0].messages.length} messages`);
+      
+      // Log a sample of raw messages (up to 3)
+      if (data[0].messages.length > 0) {
+        console.log('Raw messages sample from database:', 
+          JSON.stringify(data[0].messages.slice(0, Math.min(3, data[0].messages.length))));
+      }
       
       // Ensure message structure is correct
       if (data[0].messages.length === 0) {
         return { messages: [], id: data[0].id };
       }
       
-      // Parse the messages and ensure timestamp is a Date object
-      const parsedMessages = data[0].messages.map((msg: any) => ({
-        id: msg.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp)
-      }));
+      // Parse the messages from JSONB[] format and ensure timestamp is a Date object
+      const parsedMessages = data[0].messages.map((msgStr: any) => {
+        try {
+          // Handle both string and object formats for backward compatibility
+          const msg = typeof msgStr === 'string' ? JSON.parse(msgStr) : msgStr;
+          console.log('Processing message:', JSON.stringify(msg));
+          
+          // Validate required fields and set defaults if missing
+          if (!msg.role || (msg.role !== 'user' && msg.role !== 'assistant')) {
+            console.warn('Message with invalid role:', msg);
+          }
+          
+          if (!msg.content) {
+            console.warn('Message with missing content:', msg);
+          }
+          
+          return {
+            id: msg.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            role: (msg.role === 'user' || msg.role === 'assistant') ? msg.role : 'assistant',
+            content: msg.content || '(Message content unavailable)',
+            timestamp: msg.timestamp ? (msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp)) : new Date()
+          };
+        } catch (error) {
+          console.error('Error parsing message:', error, msgStr);
+          // Return a default message as fallback
+          return {
+            id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            role: 'assistant',
+            content: 'Error loading message',
+            timestamp: new Date()
+          };
+        }
+      });
       
       // Verify we have both user and assistant messages
       const userMessages = parsedMessages.filter((m: Message) => m.role === 'user').length;
       const assistantMessages = parsedMessages.filter((m: Message) => m.role === 'assistant').length;
       
       console.log(`User messages: ${userMessages}, Assistant messages: ${assistantMessages}`);
+      
+      // Log each message for debugging
+      console.log('Parsed messages:');
+      parsedMessages.forEach((msg, index) => {
+        const contentPreview = msg.content 
+          ? `"${msg.content.substring(0, 30)}${msg.content.length > 30 ? '...' : ''}"` 
+          : "[no content]";
+        console.log(`[${index}] ${msg.role || 'unknown'}: ${contentPreview} (${msg.timestamp})`);
+      });
       
       // Ensure parsed messages are sorted by timestamp to maintain conversation flow
       const sortedMessages = [...parsedMessages].sort((a, b) => {

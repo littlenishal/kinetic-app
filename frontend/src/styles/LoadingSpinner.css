@@ -1,0 +1,89 @@
+/* frontend/src/styles/LoadingSpinner.css */
+.loading-spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.loading-spinner-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(249, 250, 251, 0.8);
+  z-index: 9999;
+}
+
+.loading-spinner {
+  border-radius: 50%;
+  border-style: solid;
+  border-color: #e5e7eb;
+  border-top-color: #3b82f6;
+  animation: spin 1s linear infinite;
+}
+
+.loading-spinner-small {
+  width: 1rem;
+  height: 1rem;
+  border-width: 2px;
+}
+
+.loading-spinner-medium {
+  width: 2rem;
+  height: 2rem;
+  border-width: 3px;
+}
+
+.loading-spinner-large {
+  width: 3rem;
+  height: 3rem;
+  border-width: 4px;
+}
+
+.loading-message {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: #4b5563;
+  text-align: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .loading-spinner-fullscreen {
+    background-color: rgba(17, 24, 39, 0.8);
+  }
+  
+  .loading-spinner {
+    border-color: #4b5563;
+    border-top-color: #60a5fa;
+  }
+  
+  .loading-message {
+    color: #e5e7eb;
+  }
+}
