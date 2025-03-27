@@ -163,17 +163,14 @@ const CalendarPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Event details modal with backdrop */}
+      {/* Event details modal */}
       {selectedEvent && (
-        <>
-          <div className="modal-backdrop" onClick={handleCloseDetails} aria-hidden="true" />
-          <EventDetails 
-            event={selectedEvent} 
-            onClose={handleCloseDetails}
-            onDelete={handleEventDeleted}
-            onEdit={handleEventEdited}
-          />
-        </>
+        <EventDetails 
+          event={selectedEvent} 
+          onClose={handleCloseDetails}
+          onDelete={handleEventDeleted}
+          onEdit={handleEventEdited}
+        />
       )}
     </div>
   );
