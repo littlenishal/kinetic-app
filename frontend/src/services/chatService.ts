@@ -277,7 +277,7 @@ export const fetchConversation = async (): Promise<{ messages: Message[]; id: st
       
       // Log each message for debugging
       console.log('Parsed messages:');
-      parsedMessages.forEach((msg, index) => {
+      parsedMessages.forEach((msg: Message, index: number) => {
         const contentPreview = msg.content 
           ? `"${msg.content.substring(0, 30)}${msg.content.length > 30 ? '...' : ''}"` 
           : "[no content]";
