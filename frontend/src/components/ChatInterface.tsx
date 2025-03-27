@@ -10,6 +10,7 @@ import EventSearchResults from './EventSearchResults';
 import '../styles/ChatInterface.css';
 import '../styles/EventEditPreview.css';
 import '../styles/EventSearchResults.css';
+import '../styles/EventPreview.css';
 
 const ChatInterface: React.FC = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -172,11 +173,13 @@ const ChatInterface: React.FC = () => {
         
         {/* Event preview for new events */}
         {eventPreview && (
-          <EventPreview 
-            event={eventPreview}
-            onConfirm={handleConfirmEvent}
-            onCancel={handleCancelEventAction}
-          />
+          <div className="event-preview-wrapper">
+            <EventPreview 
+              event={eventPreview}
+              onConfirm={handleConfirmEvent}
+              onCancel={handleCancelEventAction}
+            />
+          </div>
         )}
         
         {/* Event search results when we're looking for an event to edit */}
